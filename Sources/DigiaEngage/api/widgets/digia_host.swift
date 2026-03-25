@@ -15,6 +15,11 @@ public struct DigiaHost<Content: View>: View {
     @ObservedObject private var controller = SDKInstance.shared.controller
     @ObservedObject private var navigation = SDKInstance.shared.navigationController
 
+    /// Separate from navigation.path.isEmpty so we can animate the overlay
+    /// in/out independently — the path is already updated before this fires,
+    /// so the NavigationStack's content is fully set when the slide begins.
+    @State private var isNavigationVisible = false
+
     public init(@ViewBuilder content: () -> Content) {
         self.content = content()
     }
@@ -25,13 +30,7 @@ public struct DigiaHost<Content: View>: View {
                 .onAppear { SDKInstance.shared.onHostMounted() }
                 .onDisappear { SDKInstance.shared.onHostUnmounted() }
 
-            // Digia navigation overlay — slides in/out from trailing edge,
-            // driven by withAnimation() calls in DigiaNavigationController.
-            // .transaction strips that ambient context from propagating into
-            // the NavigationStack's content so only the container slides
-            // (no double-transition). NavigationStack's UIKit-backed push/pop
-            // animations are unaffected by .transaction.
-            if !navigation.path.isEmpty {
+            if isNavigationVisible {
                 NavigationStack(
                     path: Binding(
                         get: { Array(navigation.path.dropFirst()) },
@@ -54,7 +53,6 @@ public struct DigiaHost<Content: View>: View {
                         }
                     }
                 }
-                .transaction { $0.animation = nil }
                 .transition(.move(edge: .trailing))
                 .ignoresSafeArea()
             }
@@ -76,17 +74,24 @@ public struct DigiaHost<Content: View>: View {
             }
             .animation(.easeInOut(duration: 0.2), value: controller.activeToast != nil)
         }
+        // Drive the overlay slide from the view using withAnimation so the
+        // explicit animation context is set in the same render pass that
+        // evaluates the if/transition.  By the time onChange fires, navigation.path
+        // already contains the new entries, so the NavigationStack's root content
+        // is fully populated when the slide begins — no double-animation.
+        .onChange(of: navigation.path.isEmpty) { isEmpty in
+            withAnimation(.easeInOut(duration: isEmpty ? 0.25 : 0.3)) {
+                isNavigationVisible = !isEmpty
+            }
+        }
         .onChange(of: controller.activePayload) { payload in
             handlePayload(payload)
         }
     }
 
-    /// Reads the `command` and `viewId` from the CEP payload and routes it through
-    /// the appropriate action processor so the SDUI renderer handles the view.
     private func handlePayload(_ payload: InAppPayload?) {
         guard let payload else { return }
 
-        // Determine presentation command — explicit `command` wins, otherwise fall back to `type`.
         let command = (payload.content.command ?? payload.content.type)
             .trimmingCharacters(in: .whitespaces)
             .uppercased()
@@ -94,7 +99,6 @@ public struct DigiaHost<Content: View>: View {
         let viewId = payload.content.viewId
 
         guard let viewId, !viewId.isEmpty else {
-            // No SDUI view to render — dismiss silently.
             controller.onEvent?(.dismissed, payload)
             controller.dismiss()
             return
@@ -118,7 +122,6 @@ public struct DigiaHost<Content: View>: View {
                 controller.dismiss()
             }
         } else {
-            // Default: dialog presentation for SHOW_DIALOG and any unrecognised overlay command.
             var actionData: [String: JSONValue] = [
                 "componentId": .string(viewId),
                 "barrierDismissible": .bool(true)
