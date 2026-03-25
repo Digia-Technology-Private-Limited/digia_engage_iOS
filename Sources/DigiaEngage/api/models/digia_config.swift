@@ -1,0 +1,80 @@
+import Foundation
+
+public enum DigiaLogLevel: Sendable, Equatable {
+    case none
+    case error
+    case verbose
+}
+
+public enum DigiaEnvironment: Sendable, Equatable {
+    case production
+    case sandbox
+}
+
+public struct DigiaNetworkConfiguration: Sendable, Equatable {
+    public let defaultHeaders: [String: String]
+    public let timeout: Duration
+
+    public init(
+        defaultHeaders: [String: String] = [:],
+        timeout: Duration = .seconds(30)
+    ) {
+        self.defaultHeaders = defaultHeaders
+        self.timeout = timeout
+    }
+}
+
+public struct DigiaDeveloperConfig: Sendable, Equatable {
+    public let proxyURL: String?
+    public let baseURL: String
+
+    public init(
+        proxyURL: String? = nil,
+        baseURL: String = "https://app.digia.tech/api/v1"
+    ) {
+        self.proxyURL = proxyURL
+        self.baseURL = baseURL
+    }
+}
+
+public enum DigiaInitStrategy: Sendable, Equatable {
+    case networkFirst(timeout: Duration)
+    case cacheFirst
+    case localFirst
+}
+
+public enum DigiaFlavor: Sendable, Equatable {
+    case debug(branchName: String? = nil)
+    case staging
+    case versioned(Int)
+    case release(
+        initStrategy: DigiaInitStrategy,
+        appConfigPath: String,
+        functionsPath: String
+    )
+}
+
+public struct DigiaConfig: Sendable, Equatable {
+    public let apiKey: String
+    public let logLevel: DigiaLogLevel
+    public let environment: DigiaEnvironment
+    public let flavor: DigiaFlavor
+    public let networkConfiguration: DigiaNetworkConfiguration?
+    public let developerConfig: DigiaDeveloperConfig?
+
+    public init(
+        apiKey: String,
+        logLevel: DigiaLogLevel = .error,
+        environment: DigiaEnvironment = .production,
+        flavor: DigiaFlavor? = nil,
+        networkConfiguration: DigiaNetworkConfiguration? = nil,
+        developerConfig: DigiaDeveloperConfig? = nil
+    ) {
+        self.apiKey = apiKey
+        self.logLevel = logLevel
+        self.environment = environment
+        self.flavor = flavor ?? .debug()
+        self.networkConfiguration = networkConfiguration
+        self.developerConfig = developerConfig
+    }
+}

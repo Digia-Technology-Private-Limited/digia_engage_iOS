@@ -1,0 +1,25 @@
+import DigiaEngage
+import SwiftUI
+
+@main
+struct DigiaEngageSampleApp: App {
+    init() {
+        Task {
+            try await Digia.initialize(
+                DigiaConfig(
+                    apiKey: "69abfbcb79d23afa245a60ee",
+                    logLevel: .verbose,
+                    flavor: .debug()
+                )
+            )
+        }
+    }
+
+    var body: some Scene {
+        WindowGroup {
+            DigiaHost {
+                DigiaInitialRouteScreen()
+            }
+        }
+     }
+}

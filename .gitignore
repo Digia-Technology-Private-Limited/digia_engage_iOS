@@ -1,0 +1,36 @@
+.DS_Store
+
+# Swift Package Manager build artifacts
+.build/
+.swiftpm/
+
+# Xcode user-specific data
+*.xcworkspace/xcuserdata/
+*.xcworkspace/xcshareddata/swiftpm/Package.resolved
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Xcode derived and intermediate files
+DerivedData/
+*.moved-aside
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata/
+
+# Swift driver incremental outputs (should live under DerivedData/.build; remove if emitted here)
+*.swiftdeps
+*.dia
+*.d
+
+# CocoaPods sample app artifacts
+SampleApp/Pods/
+SampleApp/Podfile.lock
+SampleApp/*.xcworkspace/
+
+.derivedData/
