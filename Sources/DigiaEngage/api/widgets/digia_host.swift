@@ -27,35 +27,41 @@ public struct DigiaHost<Content: View>: View {
 
             // Digia navigation overlay — slides in/out from trailing edge,
             // consistent for every push regardless of stack depth.
-            Group {
-                if !navigation.path.isEmpty {
-                    NavigationStack(
-                        path: Binding(
-                            get: { Array(navigation.path.dropFirst()) },
-                            set: { newTail in
-                                guard let first = navigation.path.first else { return }
-                                navigation.updatePath([first] + newTail)
-                            }
+            // Use AnyTransition.animation() so the easing is scoped only to
+            // this container's entrance/exit and does NOT propagate an ambient
+            // animation context into the NavigationStack (which would cause the
+            // root page to also slide, producing the double-transition bug).
+            if !navigation.path.isEmpty {
+                NavigationStack(
+                    path: Binding(
+                        get: { Array(navigation.path.dropFirst()) },
+                        set: { newTail in
+                            guard let first = navigation.path.first else { return }
+                            navigation.updatePath([first] + newTail)
+                        }
+                    )
+                ) {
+                    if let first = navigation.path.first {
+                        DUIFactory.shared.createPage(
+                            first.pageID,
+                            pageArgs: navigation.args(for: first.id)
                         )
-                    ) {
-                        if let first = navigation.path.first {
+                        .navigationDestination(for: NavigationEntry.self) { entry in
                             DUIFactory.shared.createPage(
-                                first.pageID,
-                                pageArgs: navigation.args(for: first.id)
+                                entry.pageID,
+                                pageArgs: navigation.args(for: entry.id)
                             )
-                            .navigationDestination(for: NavigationEntry.self) { entry in
-                                DUIFactory.shared.createPage(
-                                    entry.pageID,
-                                    pageArgs: navigation.args(for: entry.id)
-                                )
-                            }
                         }
                     }
-                    .transition(.move(edge: .trailing))
-                    .ignoresSafeArea()
                 }
+                .transition(
+                    .asymmetric(
+                        insertion: AnyTransition.move(edge: .trailing).animation(.easeInOut(duration: 0.3)),
+                        removal: AnyTransition.move(edge: .trailing).animation(.easeInOut(duration: 0.25))
+                    )
+                )
+                .ignoresSafeArea()
             }
-            .animation(.easeInOut(duration: 0.3), value: navigation.path.isEmpty)
 
             // Toast overlay (rendered natively above all navigation)
             VStack {
