@@ -26,11 +26,11 @@ public struct DigiaHost<Content: View>: View {
                 .onDisappear { SDKInstance.shared.onHostUnmounted() }
 
             // Digia navigation overlay — slides in/out from trailing edge,
-            // consistent for every push regardless of stack depth.
-            // Use AnyTransition.animation() so the easing is scoped only to
-            // this container's entrance/exit and does NOT propagate an ambient
-            // animation context into the NavigationStack (which would cause the
-            // root page to also slide, producing the double-transition bug).
+            // driven by withAnimation() calls in DigiaNavigationController.
+            // .transaction strips that ambient context from propagating into
+            // the NavigationStack's content so only the container slides
+            // (no double-transition). NavigationStack's UIKit-backed push/pop
+            // animations are unaffected by .transaction.
             if !navigation.path.isEmpty {
                 NavigationStack(
                     path: Binding(
@@ -54,12 +54,8 @@ public struct DigiaHost<Content: View>: View {
                         }
                     }
                 }
-                .transition(
-                    .asymmetric(
-                        insertion: AnyTransition.move(edge: .trailing).animation(.easeInOut(duration: 0.3)),
-                        removal: AnyTransition.move(edge: .trailing).animation(.easeInOut(duration: 0.25))
-                    )
-                )
+                .transaction { $0.animation = nil }
+                .transition(.move(edge: .trailing))
                 .ignoresSafeArea()
             }
 

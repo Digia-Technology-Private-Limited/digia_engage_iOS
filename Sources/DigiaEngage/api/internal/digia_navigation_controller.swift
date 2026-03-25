@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 /// A typed navigation entry carrying page identity and page-level arguments.
 struct NavigationEntry: Hashable, Sendable {
@@ -22,6 +23,9 @@ final class DigiaNavigationController: ObservableObject {
     /// Continuations awaiting a page result, keyed by the entry that was pushed.
     private var resultContinuations: [UUID: CheckedContinuation<JSONValue?, Never>] = [:]
 
+    private static let pushAnimation = Animation.easeInOut(duration: 0.3)
+    private static let popAnimation  = Animation.easeInOut(duration: 0.25)
+
     // MARK: - Setup
 
     func setInitialRoute(_ route: String) {
@@ -34,7 +38,7 @@ final class DigiaNavigationController: ObservableObject {
         cleanUpAllContinuations()
         rootRoute = route
         rootArgs = args
-        path = []
+        withAnimation(Self.popAnimation) { path = [] }
         entryArgs.removeAll()
     }
 
@@ -47,6 +51,7 @@ final class DigiaNavigationController: ObservableObject {
     }
 
     // MARK: - Path binding (swipe-back / system pop)
+    // Called by the NavigationStack binding — UIKit is already animating, no withAnimation needed.
 
     func updatePath(_ newPath: [NavigationEntry]) {
         if newPath.count < path.count {
@@ -72,7 +77,7 @@ final class DigiaNavigationController: ObservableObject {
         }
         let entry = NavigationEntry(pageID: normalized)
         entryArgs[entry.id] = args
-        path.append(entry)
+        withAnimation(Self.pushAnimation) { path.append(entry) }
     }
 
     // MARK: - Push (await result)
@@ -89,7 +94,7 @@ final class DigiaNavigationController: ObservableObject {
         }
         let entry = NavigationEntry(pageID: normalized)
         entryArgs[entry.id] = args
-        path.append(entry)
+        withAnimation(Self.pushAnimation) { path.append(entry) }
         guard waitingForResult else { return nil }
         return await withCheckedContinuation { [entryID = entry.id] continuation in
             resultContinuations[entryID] = continuation
@@ -100,16 +105,19 @@ final class DigiaNavigationController: ObservableObject {
 
     func pop(result: JSONValue? = nil) {
         guard !path.isEmpty else { return }
-        let entry = path.removeLast()
+        let entry = path.last!
+        withAnimation(Self.popAnimation) { path.removeLast() }
         entryArgs.removeValue(forKey: entry.id)
         resultContinuations.removeValue(forKey: entry.id)?.resume(returning: result)
     }
 
     func popUntil(_ matcher: (String) -> Bool) {
-        while !path.isEmpty, let last = path.last, !matcher(last.pageID) {
-            let entry = path.removeLast()
-            entryArgs.removeValue(forKey: entry.id)
-            resultContinuations.removeValue(forKey: entry.id)?.resume(returning: nil)
+        withAnimation(Self.popAnimation) {
+            while !path.isEmpty, let last = path.last, !matcher(last.pageID) {
+                let entry = path.removeLast()
+                entryArgs.removeValue(forKey: entry.id)
+                resultContinuations.removeValue(forKey: entry.id)?.resume(returning: nil)
+            }
         }
     }
 
