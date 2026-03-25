@@ -24,12 +24,11 @@ public struct DigiaHost<Content: View>: View {
             content
                 .onAppear { SDKInstance.shared.onHostMounted() }
                 .onDisappear { SDKInstance.shared.onHostUnmounted() }
-                .fullScreenCover(
-                    isPresented: Binding(
-                        get: { !navigation.path.isEmpty },
-                        set: { isPresented in if !isPresented { navigation.pop() } }
-                    )
-                ) {
+
+            // Digia navigation overlay — slides in/out from trailing edge,
+            // consistent for every push regardless of stack depth.
+            Group {
+                if !navigation.path.isEmpty {
                     NavigationStack(
                         path: Binding(
                             get: { Array(navigation.path.dropFirst()) },
@@ -52,9 +51,13 @@ public struct DigiaHost<Content: View>: View {
                             }
                         }
                     }
+                    .transition(.move(edge: .trailing))
+                    .ignoresSafeArea()
                 }
+            }
+            .animation(.easeInOut(duration: 0.3), value: navigation.path.isEmpty)
 
-            // Toast overlay (rendered natively)
+            // Toast overlay (rendered natively above all navigation)
             VStack {
                 Spacer()
                 if let toast = controller.activeToast {
