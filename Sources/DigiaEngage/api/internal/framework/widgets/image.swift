@@ -1,4 +1,5 @@
 import SwiftUI
+import SDWebImageSwiftUI
 
 @MainActor
 final class VWImage: VirtualLeafStatelessWidget<ImageProps> {
@@ -111,6 +112,49 @@ private struct InternalImageView: View {
                 loadFailed = false
                 intrinsicAspectRatio = nil
             }
+            // .task runs outside the view body evaluation cycle — mutations here
+            // are never "during view update" and never trigger the SwiftUI warning.
+            // It cancels and restarts automatically when `source` changes.
+            .task(id: source) {
+                await resolveImageMetrics(for: source)
+            }
+    }
+
+    private func resolveImageMetrics(for source: String?) async {
+        guard let source, !source.isEmpty, source.hasPrefix("http"),
+              let url = URL(string: source) else { return }
+
+        // Serve from cache immediately without hitting the network.
+        if let cached = Self.aspectRatioCache[source] {
+            intrinsicAspectRatio = cached
+            return
+        }
+
+        // SDWebImageManager reuses the same memory/disk cache as WebImage,
+        // so this never causes a second download.
+        let image: UIImage? = await withCheckedContinuation { continuation in
+            SDWebImageManager.shared.loadImage(
+                with: url,
+                options: [.retryFailed, .scaleDownLargeImages],
+                progress: nil
+            ) { img, _, _, _, finished, _ in
+                guard finished else { return }
+                continuation.resume(returning: img)
+            }
+        }
+
+        guard !Task.isCancelled else { return }
+
+        guard let image else {
+            loadFailed = true
+            return
+        }
+
+        loadFailed = false
+        let aspect = image.size.height > 0 ? image.size.width / image.size.height : nil
+        guard let aspect, aspect.isFinite, aspect > 0 else { return }
+        intrinsicAspectRatio = aspect
+        Self.aspectRatioCache[source] = aspect
     }
 
     private func resolvedSource() -> String? {
@@ -336,19 +380,9 @@ private struct InternalImageView: View {
     }
 
     private func remoteImageView(url: URL, source: String, tintColor: Color?) -> some View {
-        DigiaCachedImageView(
-            url: url,
-            tintColor: tintColor,
-            onSuccess: { image in
-                loadFailed = false
-                let aspect = image.size.height > 0 ? image.size.width / image.size.height : nil
-                guard let aspect, aspect.isFinite, aspect > 0 else { return }
-                intrinsicAspectRatio = aspect
-                Self.aspectRatioCache[source] = aspect
-            },
-            onFailure: {
-                loadFailed = true
-            }
-        )
+        // Callbacks removed — aspect ratio and failure are tracked via .task(id: source)
+        // in body, which runs outside the view update cycle and avoids the
+        // "Modifying state during view update" runtime warning.
+        DigiaCachedImageView(url: url, tintColor: tintColor)
     }
 }

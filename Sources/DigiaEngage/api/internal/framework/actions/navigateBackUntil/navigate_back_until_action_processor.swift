@@ -25,6 +25,8 @@ struct NavigateBackUntilProcessor {
             }
             return false
         }
-        ViewControllerUtil.popToRoot()
+        if !SDKInstance.shared.isHostMounted {
+            ViewControllerUtil.popToRoot()
+        }
     }
 }

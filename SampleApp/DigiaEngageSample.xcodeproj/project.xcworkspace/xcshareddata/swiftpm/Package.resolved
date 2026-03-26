@@ -1,5 +1,5 @@
 {
-  "originHash" : "48edc38616b7f8c59efb535065ac6a1491c1d04456e2bca6f68632e3808ae1f5",
+  "originHash" : "318a43742251087f0e259376bdbd34d27dbabdf2e68cf782f70dc13125121d52",
   "pins" : [
     {
       "identity" : "alerttoast",
@@ -53,15 +53,6 @@
       "state" : {
         "revision" : "0e331457ca9af2f0b08bcaa138a91ffb907b004f",
         "version" : "3.1.4"
-      }
-    },
-    {
-      "identity" : "viewinspector",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/nalexn/ViewInspector.git",
-      "state" : {
-        "revision" : "e9a06346499a3a889165647e3f23f8a7b2609a1c",
-        "version" : "0.10.3"
       }
     }
   ],

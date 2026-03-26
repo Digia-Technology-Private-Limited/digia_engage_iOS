@@ -18,7 +18,7 @@ struct DigiaEngageSampleApp: App {
     var body: some Scene {
         WindowGroup {
             DigiaHost {
-                DigiaInitialRouteScreen()
+                DUIFactory.shared.createInitialPage()
             }
         }
      }

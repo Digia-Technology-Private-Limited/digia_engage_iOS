@@ -6,19 +6,13 @@ import SwiftUI
 /// Place this widget once, at the root of your application:
 /// ```swift
 /// DigiaHost {
-///     ContentView()
+///     DUIFactory.shared.createInitialPage()
 /// }
 /// ```
 @MainActor
 public struct DigiaHost<Content: View>: View {
     private let content: Content
     @ObservedObject private var controller = SDKInstance.shared.controller
-    @ObservedObject private var navigation = SDKInstance.shared.navigationController
-
-    /// Separate from navigation.path.isEmpty so we can animate the overlay
-    /// in/out independently — the path is already updated before this fires,
-    /// so the NavigationStack's content is fully set when the slide begins.
-    @State private var isNavigationVisible = false
 
     public init(@ViewBuilder content: () -> Content) {
         self.content = content()
@@ -29,33 +23,6 @@ public struct DigiaHost<Content: View>: View {
             content
                 .onAppear { SDKInstance.shared.onHostMounted() }
                 .onDisappear { SDKInstance.shared.onHostUnmounted() }
-
-            if isNavigationVisible {
-                NavigationStack(
-                    path: Binding(
-                        get: { Array(navigation.path.dropFirst()) },
-                        set: { newTail in
-                            guard let first = navigation.path.first else { return }
-                            navigation.updatePath([first] + newTail)
-                        }
-                    )
-                ) {
-                    if let first = navigation.path.first {
-                        DUIFactory.shared.createPage(
-                            first.pageID,
-                            pageArgs: navigation.args(for: first.id)
-                        )
-                        .navigationDestination(for: NavigationEntry.self) { entry in
-                            DUIFactory.shared.createPage(
-                                entry.pageID,
-                                pageArgs: navigation.args(for: entry.id)
-                            )
-                        }
-                    }
-                }
-                .transition(.move(edge: .trailing))
-                .ignoresSafeArea()
-            }
 
             // Toast overlay (rendered natively above all navigation)
             VStack {
@@ -73,16 +40,6 @@ public struct DigiaHost<Content: View>: View {
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: controller.activeToast != nil)
-        }
-        // Drive the overlay slide from the view using withAnimation so the
-        // explicit animation context is set in the same render pass that
-        // evaluates the if/transition.  By the time onChange fires, navigation.path
-        // already contains the new entries, so the NavigationStack's root content
-        // is fully populated when the slide begins — no double-animation.
-        .onChange(of: navigation.path.isEmpty) { isEmpty in
-            withAnimation(.easeInOut(duration: isEmpty ? 0.25 : 0.3)) {
-                isNavigationVisible = !isEmpty
-            }
         }
         .onChange(of: controller.activePayload) { payload in
             handlePayload(payload)
@@ -138,4 +95,5 @@ public struct DigiaHost<Content: View>: View {
             }
         }
     }
+
 }

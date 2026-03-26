@@ -33,6 +33,15 @@ struct ShowDialogProcessor {
             args = [:]
         }
 
+        // Style properties — mirrors Flutter's action.style
+        let style = action.data["style"]?.objectValue ?? [:]
+
+        let barrierColorStr = ExpressionUtil.evaluateNestedExpressionsToAny(
+            style["barrierColor"], in: context.scopeContext
+        ) as? String
+        let barrierColor: Color = barrierColorStr.flatMap { ColorUtil.fromString($0) }
+            ?? Color.black.opacity(0.54)  // Flutter default: Colors.black54
+
         let presentation = DigiaDialogPresentation(
             view: DigiaViewPresentation(
                 viewID: viewID,
@@ -40,14 +49,22 @@ struct ShowDialogProcessor {
                 text: viewData.string("text") ?? action.data.string("message"),
                 args: args
             ),
-            barrierDismissible: barrierDismissible
+            barrierDismissible: barrierDismissible,
+            barrierColor: barrierColor
         )
         SDKInstance.shared.controller.showDialog(presentation)
 
         let overlayController = SDKInstance.shared.controller
+
+        // Layout mirrors Flutter's Dialog(child: ...):
+        //   Dialog wraps content at intrinsic size, centered on screen.
+        //   fixedSize(vertical: true) prevents the ZStack from offering full screen
+        //   height to the content, matching Flutter's intrinsic-height behavior.
+        let maxDialogWidth = min(UIScreen.main.bounds.width - 48, 560.0)
+
         let root = ZStack {
-            if barrierDismissible {
-                Color.black.opacity(0.35)
+            if presentation.barrierDismissible {
+                presentation.barrierColor
                     .ignoresSafeArea()
                     .contentShape(Rectangle())
                     .onTapGesture {
@@ -58,13 +75,18 @@ struct ShowDialogProcessor {
                         }
                     }
             } else {
-                Color.black.opacity(0.35)
+                presentation.barrierColor
                     .ignoresSafeArea()
             }
+
             DigiaPresentationView(presentation: presentation.view)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(minWidth: 280, maxWidth: maxDialogWidth)
+                .background(Color(uiColor: .systemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
                 .padding(24)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
+
         let host = UIHostingController(rootView: root)
         host.view.backgroundColor = .clear
         host.modalPresentationStyle = .overFullScreen

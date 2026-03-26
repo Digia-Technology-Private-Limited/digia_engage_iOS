@@ -38,7 +38,7 @@ final class DigiaNavigationController: ObservableObject {
         cleanUpAllContinuations()
         rootRoute = route
         rootArgs = args
-        withAnimation(Self.popAnimation) { path = [] }
+        withAnimation(.easeInOut(duration: 0.25)) { path = [] }
         entryArgs.removeAll()
     }
 
@@ -77,12 +77,7 @@ final class DigiaNavigationController: ObservableObject {
         }
         let entry = NavigationEntry(pageID: normalized)
         entryArgs[entry.id] = args
-        if path.isEmpty {
-            // First push: onChange in DigiaHost drives the slide-in animation
-            path.append(entry)
-        } else {
-            withAnimation(Self.pushAnimation) { path.append(entry) }
-        }
+        withAnimation(Self.pushAnimation) { path.append(entry) }
     }
 
     // MARK: - Push (await result)
@@ -99,12 +94,7 @@ final class DigiaNavigationController: ObservableObject {
         }
         let entry = NavigationEntry(pageID: normalized)
         entryArgs[entry.id] = args
-        if path.isEmpty {
-            // First push: onChange in DigiaHost drives the slide-in animation
-            path.append(entry)
-        } else {
-            withAnimation(Self.pushAnimation) { path.append(entry) }
-        }
+        withAnimation(Self.pushAnimation) { path.append(entry) }
         guard waitingForResult else { return nil }
         return await withCheckedContinuation { [entryID = entry.id] continuation in
             resultContinuations[entryID] = continuation
@@ -116,12 +106,7 @@ final class DigiaNavigationController: ObservableObject {
     func pop(result: JSONValue? = nil) {
         guard !path.isEmpty else { return }
         let entry = path.last!
-        if path.count == 1 {
-            // Last pop: onChange in DigiaHost drives the slide-out animation
-            path.removeLast()
-        } else {
-            withAnimation(Self.popAnimation) { path.removeLast() }
-        }
+        withAnimation(Self.popAnimation) { path.removeLast() }
         entryArgs.removeValue(forKey: entry.id)
         resultContinuations.removeValue(forKey: entry.id)?.resume(returning: result)
     }

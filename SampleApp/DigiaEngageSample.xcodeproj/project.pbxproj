@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		FB6184652F73CD5E00F9FC50 /* DigiaEngage in Frameworks */ = {isa = PBXBuildFile; productRef = FB6184642F73CD5E00F9FC50 /* DigiaEngage */; };
+		FBE8C20E2F73E9C00029F5BA /* DigiaEngage in Frameworks */ = {isa = PBXBuildFile; productRef = FBE8C20D2F73E9C00029F5BA /* DigiaEngage */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -27,7 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				FB6184652F73CD5E00F9FC50 /* DigiaEngage in Frameworks */,
+				FBE8C20E2F73E9C00029F5BA /* DigiaEngage in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -70,7 +70,7 @@
 			);
 			name = DigiaEngageSample;
 			packageProductDependencies = (
-				FB6184642F73CD5E00F9FC50 /* DigiaEngage */,
+				FBE8C20D2F73E9C00029F5BA /* DigiaEngage */,
 			);
 			productName = DigiaEngageSample;
 			productReference = A10000000000000000000003 /* DigiaEngageSample.app */;
@@ -84,7 +84,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2620;
-				LastUpgradeCheck = 2620;
+				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					A10000000000000000000008 = {
 						CreatedOnToolsVersion = 26.2;
@@ -101,7 +101,7 @@
 			mainGroup = A10000000000000000000006;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				FB6184632F73CD5E00F9FC50 /* XCLocalSwiftPackageReference "../.." */,
+				FBE8C20C2F73E9C00029F5BA /* XCLocalSwiftPackageReference "../../digia_engage_ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A10000000000000000000007 /* Products */;
@@ -168,6 +168,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -191,6 +192,7 @@
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -230,6 +232,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -246,6 +249,7 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -257,6 +261,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -274,9 +279,10 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.digia.engage.sample;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -286,6 +292,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -303,9 +310,10 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.digia.engage.sample;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};
@@ -333,16 +341,15 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		FB6184632F73CD5E00F9FC50 /* XCLocalSwiftPackageReference "../.." */ = {
+		FBE8C20C2F73E9C00029F5BA /* XCLocalSwiftPackageReference "../../digia_engage_ios" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = "../..";
+			relativePath = ../../digia_engage_ios;
 		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		FB6184642F73CD5E00F9FC50 /* DigiaEngage */ = {
+		FBE8C20D2F73E9C00029F5BA /* DigiaEngage */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = FB6184632F73CD5E00F9FC50 /* XCLocalSwiftPackageReference "../../.." */;
 			productName = DigiaEngage;
 		};
 /* End XCSwiftPackageProductDependency section */

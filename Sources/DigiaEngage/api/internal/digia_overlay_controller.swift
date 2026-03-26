@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import SwiftUI
 
 struct DigiaViewPresentation: Equatable, Sendable {
     let viewID: String
@@ -15,11 +16,40 @@ struct DigiaToastPresentation: Equatable, Sendable {
 
 struct DigiaBottomSheetPresentation: Equatable, Sendable {
     let view: DigiaViewPresentation
+    let barrierColor: Color
+    let maxHeight: Double
+    let borderColor: Color?
+    let borderWidth: CGFloat?
+    
+    init(
+        view: DigiaViewPresentation,
+        barrierColor: Color = Color.black.opacity(0.54),
+        maxHeight: Double = 1.0,
+        borderColor: Color? = nil,
+        borderWidth: CGFloat? = nil
+    ) {
+        self.view = view
+        self.barrierColor = barrierColor
+        self.maxHeight = maxHeight
+        self.borderColor = borderColor
+        self.borderWidth = borderWidth
+    }
 }
 
 struct DigiaDialogPresentation: Equatable, Sendable {
     let view: DigiaViewPresentation
     let barrierDismissible: Bool
+    let barrierColor: Color
+    
+    init(
+        view: DigiaViewPresentation,
+        barrierDismissible: Bool = true,
+        barrierColor: Color = Color.black.opacity(0.54)
+    ) {
+        self.view = view
+        self.barrierDismissible = barrierDismissible
+        self.barrierColor = barrierColor
+    }
 }
 
 @MainActor

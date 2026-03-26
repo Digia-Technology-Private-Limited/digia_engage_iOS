@@ -38,9 +38,8 @@ struct NavigateBackProcessor {
         if maybe && navController.path.isEmpty { return }
         navController.pop(result: result)
 
-        // Fallback for UIKit-embedded navigation (e.g. when DigiaInitialRouteScreen
-        // is not used and a UINavigationController owns the stack).
-        if navController.path.isEmpty {
+        // Fallback for UIKit-embedded navigation only when host navigation is not mounted.
+        if navController.path.isEmpty && !SDKInstance.shared.isHostMounted {
             ViewControllerUtil.popNavigation()
         }
     }

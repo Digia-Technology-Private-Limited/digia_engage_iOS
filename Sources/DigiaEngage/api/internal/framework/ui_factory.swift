@@ -1,8 +1,8 @@
 import SwiftUI
 
 @MainActor
-final class DUIFactory {
-    static let shared = DUIFactory()
+public final class DUIFactory {
+    public static let shared = DUIFactory()
 
     private let widgetRegistry: VirtualWidgetRegistry = DefaultVirtualWidgetRegistry()
 
@@ -23,6 +23,19 @@ final class DUIFactory {
                 pageArgs: pageArgs
             )
         )
+    }
+
+    /// Returns a full-screen navigation view that renders the SDUI initial route
+    /// as the NavigationStack root. Mirrors ``DUIFactory.createInitialPage()`` in Flutter.
+    ///
+    /// Usage:
+    /// ```swift
+    /// DigiaHost {
+    ///     DUIFactory.shared.createInitialPage()
+    /// }
+    /// ```
+    public func createInitialPage() -> some View {
+        DigiaNavigationView()
     }
 
     func createComponent(
