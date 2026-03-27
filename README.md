@@ -42,20 +42,6 @@ Then add `DigiaEngage` as a target dependency:
 
 Or add it directly in Xcode via **File → Add Package Dependencies** and enter the repository URL.
 
-### CocoaPods
-
-Add to your `Podfile`:
-
-```ruby
-pod 'DigiaEngage', '~> 1.0.0-beta.1'
-```
-
-Then run:
-
-```bash
-pod install
-```
-
 ## Usage
 
 ### Initialize the SDK
