@@ -16,11 +16,12 @@ struct InternalStreamBuilder<Content: View>: View {
     var body: some View {
         content(value, streamState, streamError)
             .onAppear {
+                guard token == nil else { return }
                 value = initialData ?? controller.currentValue
                 streamState = value == nil ? "loading" : "listening"
                 token = controller.subscribe { nextValue in
                     let emitted = ExpressionUtil.jsonValue(from: nextValue).anyValue
-                    DispatchQueue.main.async {
+                    Task { @MainActor in
                         value = emitted
                         streamState = "listening"
                         streamError = nil

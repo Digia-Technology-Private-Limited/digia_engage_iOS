@@ -11,9 +11,7 @@ struct NavigateBackProcessor {
     let processorType: ActionType = .navigateBack
 
     func execute(action: NavigateBackAction, context: ActionProcessorContext) async throws {
-        let maybe = (ExpressionUtil.evaluateNestedExpressionsToAny(
-            action.data["maybe"], in: context.scopeContext
-        ) as? Bool) ?? false
+        let maybe = (action.data["maybe"]?.deepEvaluate(in: context.scopeContext) as? Bool) ?? false
 
         let result = action.data["result"].map {
             ExpressionUtil.evaluateNestedExpressions($0, in: context.scopeContext)
@@ -22,24 +20,38 @@ struct NavigateBackProcessor {
         let overlayController = SDKInstance.shared.controller
         let navController = SDKInstance.shared.navigationController
 
-        // If a modal is active, dismiss it (with result) rather than popping the page stack.
         if overlayController.activeDialog != nil {
             overlayController.dismissDialog(result: result)
             ViewControllerUtil.dismissPresented()
             return
         }
         if overlayController.activeBottomSheet != nil {
-            overlayController.dismissBottomSheet(result: result)
-            ViewControllerUtil.dismissPresented()
+            if let transition = overlayController.bottomSheetTransition {
+                transition.animateDismiss {
+                    if overlayController.bottomSheetRendersInHost {
+                        overlayController.dismissBottomSheet(result: result)
+                        SDKInstance.shared.didDismissBottomSheet()
+                    } else {
+                        ViewControllerUtil.dismissPresented(animated: false) {
+                            overlayController.dismissBottomSheet(result: result)
+                            SDKInstance.shared.didDismissBottomSheet()
+                        }
+                    }
+                }
+            } else {
+                overlayController.dismissBottomSheet(result: result)
+                SDKInstance.shared.didDismissBottomSheet()
+                if !overlayController.bottomSheetRendersInHost {
+                    ViewControllerUtil.dismissPresented(animated: true)
+                }
+            }
             return
         }
 
-        // Navigate back within the SwiftUI navigation stack.
         if maybe && navController.path.isEmpty { return }
         navController.pop(result: result)
 
-        // Fallback for UIKit-embedded navigation only when host navigation is not mounted.
-        if navController.path.isEmpty && !SDKInstance.shared.isHostMounted {
+        if navController.path.isEmpty && !SDKInstance.shared.isNavigationMounted {
             ViewControllerUtil.popNavigation()
         }
     }

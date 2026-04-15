@@ -129,7 +129,7 @@ private struct InternalTimerWidget<Content: View>: View {
         if tickToken == nil {
             tickToken = effectiveController.subscribe { nextValue in
                 let resolved = nextValue as? Int ?? initialValue
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     currentValue = resolved
                     onTick?(resolved)
                 }
@@ -138,7 +138,7 @@ private struct InternalTimerWidget<Content: View>: View {
 
         if completionToken == nil {
             completionToken = effectiveController.subscribeCompletion { finalValue in
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     currentValue = finalValue
                     onTimerEnd?(finalValue)
                 }
@@ -211,7 +211,7 @@ final class DigiaTimerController: DigiaValueStream, ExprInstance, @unchecked Sen
     }
 
     func unsubscribe(_ token: UUID) {
-        stateQueue.sync {
+        _ = stateQueue.sync {
             listeners.removeValue(forKey: token)
         }
     }
@@ -226,7 +226,7 @@ final class DigiaTimerController: DigiaValueStream, ExprInstance, @unchecked Sen
     }
 
     func unsubscribeCompletion(_ token: UUID) {
-        stateQueue.sync {
+        _ = stateQueue.sync {
             completionListeners.removeValue(forKey: token)
         }
     }

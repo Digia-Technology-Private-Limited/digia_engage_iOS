@@ -123,8 +123,8 @@ private struct DigiaTextFormFieldView: View {
     let textStyle: ResolvedTextStyle
     let prefix: AnyView?
     let suffix: AnyView?
-    let onChanged: (@Sendable (String) -> Void)?
-    let onSubmit: (@Sendable (String) -> Void)?
+    let onChanged: ((String) -> Void)?
+    let onSubmit: ((String) -> Void)?
     let debounceMillis: Int?
 
     @StateObject private var model: DigiaTextFormFieldModel
@@ -164,8 +164,8 @@ private struct DigiaTextFormFieldView: View {
         textStyle: ResolvedTextStyle,
         prefix: AnyView?,
         suffix: AnyView?,
-        onChanged: (@Sendable (String) -> Void)?,
-        onSubmit: (@Sendable (String) -> Void)?,
+        onChanged: ((String) -> Void)?,
+        onSubmit: ((String) -> Void)?,
         debounceMillis: Int?
     ) {
         self.controller = controller
@@ -381,8 +381,8 @@ private final class DigiaTextFormFieldModel: ObservableObject {
 
     private let controller: DigiaTextEditingController?
     private let validations: [ResolvedTextFieldValidationRule]
-    private let onChanged: (@Sendable (String) -> Void)?
-    private let onSubmit: (@Sendable (String) -> Void)?
+    private let onChanged: ((String) -> Void)?
+    private let onSubmit: ((String) -> Void)?
     private let debouncer: Debouncer?
     private var cancellable: AnyCancellable?
 
@@ -391,8 +391,8 @@ private final class DigiaTextFormFieldModel: ObservableObject {
         initialValue: String?,
         validations: [ResolvedTextFieldValidationRule],
         debounceMillis: Int?,
-        onChanged: (@Sendable (String) -> Void)?,
-        onSubmit: (@Sendable (String) -> Void)?
+        onChanged: ((String) -> Void)?,
+        onSubmit: ((String) -> Void)?
     ) {
         self.controller = controller
         self.validations = validations
@@ -714,7 +714,7 @@ private struct DigiaPlatformTextInput: UIViewRepresentable {
 
         if configuration.autoFocus, !coordinator.didRequestFocus {
             coordinator.didRequestFocus = true
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 _ = view.becomeFirstResponder()
             }
             return
@@ -722,11 +722,11 @@ private struct DigiaPlatformTextInput: UIViewRepresentable {
 
         // Keep UIKit focus state consistent so tapping another field works reliably.
         if isFocused, !view.isFirstResponder {
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 _ = view.becomeFirstResponder()
             }
         } else if !isFocused, view.isFirstResponder {
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 _ = view.resignFirstResponder()
             }
         }

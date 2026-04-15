@@ -15,7 +15,7 @@ final class DefaultScopeContext: ScopeContext {
 
     func getValue(_ key: String) -> ExprLookupResult {
         if variables.keys.contains(key) {
-            let raw = variables[key]
+            let raw = variables[key] ?? nil
             return ExprLookupResult(found: true, value: ExprValue.from(raw))
         }
         return enclosing?.getValue(key) ?? ExprLookupResult(found: false, value: nil)

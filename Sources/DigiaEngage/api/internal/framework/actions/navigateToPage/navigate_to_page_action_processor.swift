@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 struct NavigateToPageAction: Sendable {
     let actionType: ActionType = .navigateToPage
@@ -17,19 +18,19 @@ struct NavigateToPageProcessor {
             throw ActionExecutionError.unsupportedContext(processorType)
         }
 
-        // Resolve args to pass to the target page.
         let rawArgs = action.data["args"]?.objectValue ?? pageData?.object("args") ?? [:]
         let args = rawArgs.mapValues { ExpressionUtil.evaluateNestedExpressions($0, in: context.scopeContext) }
 
-        let removePrevious = (ExpressionUtil.evaluateNestedExpressionsToAny(
-            action.data["shouldRemovePreviousScreensInStack"], in: context.scopeContext
-        ) as? Bool) ?? false
+        let removePrevious = (action.data["shouldRemovePreviousScreensInStack"]?.deepEvaluate(in: context.scopeContext) as? Bool) ?? false
 
-        let waitForResult = (ExpressionUtil.evaluateNestedExpressionsToAny(
-            action.data["waitForResult"], in: context.scopeContext
-        ) as? Bool) ?? false
+        let waitForResult = (action.data["waitForResult"]?.deepEvaluate(in: context.scopeContext) as? Bool) ?? false
 
         let onResultFlow = action.data["onResult"]?.asActionFlow()
+
+        if !SDKInstance.shared.isNavigationMounted {
+            presentPageModally(pageID: pageID, args: args)
+            return
+        }
 
         if removePrevious {
             SDKInstance.shared.navigationController.replaceStack(with: pageID, args: args)
@@ -51,5 +52,12 @@ struct NavigateToPageProcessor {
         } else {
             SDKInstance.shared.navigationController.push(pageID, args: args)
         }
+    }
+
+    private func presentPageModally(pageID: String, args: [String: JSONValue]) {
+        let pageView = DUIFactory.shared.createPage(pageID, pageArgs: args)
+        let hc = UIHostingController(rootView: pageView)
+        hc.modalPresentationStyle = .fullScreen
+        ViewControllerUtil.present(hc)
     }
 }

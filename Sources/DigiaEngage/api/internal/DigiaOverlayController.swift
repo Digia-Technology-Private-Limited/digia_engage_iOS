@@ -1,56 +1,4 @@
-import Foundation
-import Combine
 import SwiftUI
-
-struct DigiaViewPresentation: Equatable, Sendable {
-    let viewID: String
-    let title: String?
-    let text: String?
-    let args: [String: JSONValue]
-}
-
-struct DigiaToastPresentation: Equatable, Sendable {
-    let message: String
-    let durationSeconds: Double
-}
-
-struct DigiaBottomSheetPresentation: Equatable, Sendable {
-    let view: DigiaViewPresentation
-    let barrierColor: Color
-    let maxHeight: Double
-    let borderColor: Color?
-    let borderWidth: CGFloat?
-    
-    init(
-        view: DigiaViewPresentation,
-        barrierColor: Color = Color.black.opacity(0.54),
-        maxHeight: Double = 1.0,
-        borderColor: Color? = nil,
-        borderWidth: CGFloat? = nil
-    ) {
-        self.view = view
-        self.barrierColor = barrierColor
-        self.maxHeight = maxHeight
-        self.borderColor = borderColor
-        self.borderWidth = borderWidth
-    }
-}
-
-struct DigiaDialogPresentation: Equatable, Sendable {
-    let view: DigiaViewPresentation
-    let barrierDismissible: Bool
-    let barrierColor: Color
-    
-    init(
-        view: DigiaViewPresentation,
-        barrierDismissible: Bool = true,
-        barrierColor: Color = Color.black.opacity(0.54)
-    ) {
-        self.view = view
-        self.barrierDismissible = barrierDismissible
-        self.barrierColor = barrierColor
-    }
-}
 
 @MainActor
 final class DigiaOverlayController: ObservableObject {
@@ -62,11 +10,10 @@ final class DigiaOverlayController: ObservableObject {
 
     private var toastToken = UUID()
     var onEvent: ((DigiaExperienceEvent, InAppPayload) -> Void)?
-
-    /// Callback invoked when the active dialog is dismissed, carrying an optional result value.
     var onDialogDismissed: ((JSONValue?) -> Void)?
-    /// Callback invoked when the active bottom sheet is dismissed, carrying an optional result value.
     var onBottomSheetDismissed: ((JSONValue?) -> Void)?
+    var bottomSheetTransition: BottomSheetTransitionModel?
+    private(set) var bottomSheetRendersInHost = false
 
     func show(_ payload: InAppPayload) {
         activePayload = payload
@@ -76,11 +23,14 @@ final class DigiaOverlayController: ObservableObject {
         activePayload = nil
     }
 
-    func showBottomSheet(_ presentation: DigiaBottomSheetPresentation) {
+    func showBottomSheet(_ presentation: DigiaBottomSheetPresentation, rendersInHost: Bool = false) {
         activeBottomSheet = presentation
+        bottomSheetRendersInHost = rendersInHost
     }
 
     func dismissBottomSheet(result: JSONValue? = nil) {
+        bottomSheetTransition = nil
+        bottomSheetRendersInHost = false
         activeBottomSheet = nil
         onBottomSheetDismissed?(result)
         onBottomSheetDismissed = nil

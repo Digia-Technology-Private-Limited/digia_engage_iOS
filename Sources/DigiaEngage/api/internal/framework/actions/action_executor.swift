@@ -32,7 +32,7 @@ final class ActionExecutor {
         for step in actionFlow.steps {
             do {
                 let action = try ActionFactory.makeAction(from: step)
-                if action.disableActionIf?.resolve(in: scopeContext) == true {
+                if action.disableActionIf?.evaluate(in: scopeContext) == true {
                     continue
                 }
                 let context = ActionProcessorContext(

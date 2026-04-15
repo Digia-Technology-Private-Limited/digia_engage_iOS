@@ -178,4 +178,58 @@ enum To {
             return .byWordWrapping
         }
     }
+
+    static func cornerRadius(_ rawValue: Any?) -> CornerRadiusProps? {
+        switch rawValue {
+        case let value as Double:
+            return CornerRadiusProps(uniform: value)
+        case let value as Int:
+            return CornerRadiusProps(uniform: Double(value))
+        case let value as NSNumber:
+            return CornerRadiusProps(uniform: value.doubleValue)
+        case let value as String:
+            let parts = value
+                .split(separator: ",")
+                .compactMap { Double($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+            return cornerRadiusFromList(parts)
+        case let values as [Any?]:
+            let parts = values.compactMap { toDouble($0) }
+            return cornerRadiusFromList(parts)
+        case let object as [String: Any?]:
+            return CornerRadiusProps(
+                topLeft: toDouble(object["topLeft"] ?? nil) ?? 0,
+                topRight: toDouble(object["topRight"] ?? nil) ?? 0,
+                bottomRight: toDouble(object["bottomRight"] ?? nil) ?? 0,
+                bottomLeft: toDouble(object["bottomLeft"] ?? nil) ?? 0
+            )
+        default:
+            return nil
+        }
+    }
+
+    private static func cornerRadiusFromList(_ parts: [Double]) -> CornerRadiusProps? {
+        switch parts.count {
+        case 1:
+            return CornerRadiusProps(uniform: parts[0])
+        case 4:
+            return CornerRadiusProps(
+                topLeft: parts[0],
+                topRight: parts[1],
+                bottomRight: parts[2],
+                bottomLeft: parts[3]
+            )
+        default:
+            return nil
+        }
+    }
+
+    static func toDouble(_ rawValue: Any?) -> Double? {
+        switch rawValue {
+        case let value as Double: return value
+        case let value as Int: return Double(value)
+        case let value as NSNumber: return value.doubleValue
+        case let value as String: return Double(value.trimmingCharacters(in: .whitespacesAndNewlines))
+        default: return nil
+        }
+    }
 }

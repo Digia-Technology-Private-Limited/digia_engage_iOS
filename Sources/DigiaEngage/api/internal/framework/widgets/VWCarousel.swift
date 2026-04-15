@@ -114,7 +114,6 @@ private struct DigiaCarouselView: View {
     @State private var currentPage: Int = 0
     @State private var dragOffset: CGFloat = 0
     @State private var containerWidth: CGFloat = 0
-    @State private var containerHeight: CGFloat = 0
 
     // When infiniteScroll is on we wrap pages: [last, ...pages, first]
     private var displayPages: [AnyView] {
@@ -146,8 +145,8 @@ private struct DigiaCarouselView: View {
                     Group {
                         if axis == .horizontal {
                             HStack(spacing: 0) {
-                                ForEach(Array(displayPages.enumerated()), id: \.offset) { idx, page in
-                                    page
+                                ForEach(displayPages.indices, id: \.self) { idx in
+                                    displayPages[idx]
                                         .frame(width: pageWidth, height: ch)
                                         .scaleEffect(scaleFor(idx: idx, pageExtent: pageExtent))
                                         .animation(.easeInOut(duration: animDuration), value: currentPage)
@@ -159,8 +158,8 @@ private struct DigiaCarouselView: View {
                             .offset(x: xOffset(pageWidth: pageWidth, sideGap: sideGap))
                         } else {
                             VStack(spacing: 0) {
-                                ForEach(Array(displayPages.enumerated()), id: \.offset) { idx, page in
-                                    page
+                                ForEach(displayPages.indices, id: \.self) { idx in
+                                    displayPages[idx]
                                         .frame(width: cw, height: ch)
                                         .scaleEffect(scaleFor(idx: idx, pageExtent: pageExtent))
                                         .animation(.easeInOut(duration: animDuration), value: currentPage)
@@ -193,7 +192,6 @@ private struct DigiaCarouselView: View {
                 .clipped()
                 .onAppear {
                     containerWidth = cw
-                    containerHeight = ch
                     currentPage = phantomOffset + bounded(initialPage)
                 }
 
@@ -222,7 +220,7 @@ private struct DigiaCarouselView: View {
                     withAnimation(.easeInOut(duration: animDuration)) {
                         currentPage += delta
                     }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + animDuration) {
+                    scheduleAfterAnimation {
                         snapInfiniteLoop()
                         let newReal = realPage
                         if newReal != oldReal {
@@ -237,7 +235,7 @@ private struct DigiaCarouselView: View {
                     withAnimation(.easeInOut(duration: animDuration)) {
                         currentPage = clamped
                     }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + animDuration) {
+                    scheduleAfterAnimation {
                         let newReal = realPage
                         if newReal != oldReal {
                             onChanged(newReal)
@@ -350,7 +348,7 @@ private struct DigiaCarouselView: View {
             }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + animDuration) {
+        scheduleAfterAnimation {
             snapInfiniteLoop()
         }
 
@@ -393,6 +391,13 @@ private struct DigiaCarouselView: View {
 
     private var dotSizeHeight: Double {
         max(dotHeight, 0)
+    }
+
+    private func scheduleAfterAnimation(_ action: @escaping @MainActor () -> Void) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(max(animDuration, 0) * 1_000_000_000))
+            action()
+        }
     }
 }
 

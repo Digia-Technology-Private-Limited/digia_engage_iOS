@@ -108,7 +108,7 @@ private struct InternalImageView: View {
             .onAppear {
                 loadFailed = false
             }
-            .onChange(of: source) { _ in
+            .onChange(of: source, initial: false) { _, _ in
                 loadFailed = false
                 intrinsicAspectRatio = nil
             }

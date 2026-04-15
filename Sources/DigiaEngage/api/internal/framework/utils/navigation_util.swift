@@ -1,10 +1,17 @@
-import Foundation
 import SwiftUI
-import UIKit
+
+private enum Material3LightOverlay {
+    static let surfaceContainer = Color(red: 243 / 255, green: 237 / 255, blue: 247 / 255)
+}
 
 enum NavigationUtil {
-    static func normalizedRoute(_ value: String) -> String {
-        value.trimmingCharacters(in: .whitespacesAndNewlines)
+    static func normalizedRoute(_ route: String) -> String {
+        let trimmed = route.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+        if trimmed.hasPrefix("/") {
+            return String(trimmed.dropFirst())
+        }
+        return trimmed
     }
 
     static func enableInteractivePopGestureIfNeeded(for navigationController: UINavigationController?) {
@@ -13,73 +20,199 @@ enum NavigationUtil {
         popGesture.isEnabled = true
         popGesture.delegate = nil
     }
+
+    @MainActor
+    static func presentBottomSheetContent<Content: View>(
+        presentation: DigiaBottomSheetPresentation,
+        overlayController: DigiaOverlayController,
+        transition: BottomSheetTransitionModel,
+        dismissesPresentedViewController: Bool = true,
+        @ViewBuilder content: @escaping () -> Content
+    ) -> some View {
+        DigiaModalBottomSheetRootView(
+            presentation: presentation,
+            overlayController: overlayController,
+            transition: transition,
+            dismissesPresentedViewController: dismissesPresentedViewController,
+            content: content
+        )
+    }
+
+    @MainActor
+    static func presentDialogContent<Content: View>(
+        presentation: DigiaDialogPresentation,
+        overlayController: DigiaOverlayController,
+        dismissesPresentedViewController: Bool = true,
+        @ViewBuilder content: @escaping () -> Content
+    ) -> some View {
+        DigiaDialogRouteRootView(
+            presentation: presentation,
+            overlayController: overlayController,
+            dismissesPresentedViewController: dismissesPresentedViewController,
+            content: content
+        )
+    }
 }
 
-private struct DigiaInteractivePopGestureHost: UIViewControllerRepresentable {
-    func makeUIViewController(context: Context) -> DigiaInteractivePopGestureHostController {
-        DigiaInteractivePopGestureHostController()
+@MainActor
+private struct DigiaDialogRouteRootView<Content: View>: View {
+    let presentation: DigiaDialogPresentation
+    let overlayController: DigiaOverlayController
+    let dismissesPresentedViewController: Bool
+    @ViewBuilder var content: () -> Content
+
+    private let horizontalInset: CGFloat = 40
+    private let verticalInset: CGFloat = 24
+    private let maxDialogWidthCap: CGFloat = 560
+
+    var body: some View {
+        GeometryReader { geo in
+            let safe = geo.safeAreaInsets
+            let availableW = geo.size.width - safe.leading - safe.trailing - horizontalInset * 2
+            let maxContentW = min(maxDialogWidthCap, max(0, availableW))
+
+            ZStack {
+                if presentation.barrierDismissible {
+                    presentation.barrierColor
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            dismiss()
+                        }
+                } else {
+                    presentation.barrierColor
+                        .ignoresSafeArea()
+                }
+
+                VStack {
+                    Spacer(minLength: 0)
+                    content()
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(
+                            maxWidth: maxContentW,
+                        )
+                        .background {
+                            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                                .fill(Material3LightOverlay.surfaceContainer)
+                        }
+                        .clipShape(
+                             AnyShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                            )
+                        .shadow(
+                            color: Color.black.opacity(0.12),
+                            radius: 10,
+                            x: 0,
+                            y: 4
+                        )
+                        .frame(maxWidth: .infinity, alignment: .center)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, horizontalInset)
+                .padding(.vertical, verticalInset)
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.clear)
     }
 
-    func updateUIViewController(_ uiViewController: DigiaInteractivePopGestureHostController, context: Context) {
-        uiViewController.enableIfNeeded()
-    }
-}
-
-private final class DigiaInteractivePopGestureHostController: UIViewController {
-    /// Gesture attached to the NavigationController's view when we are the root page,
-    /// so a left-edge swipe dismisses the entire Digia navigation overlay.
-    private weak var rootEdgeGesture: UIScreenEdgePanGestureRecognizer?
-
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        enableIfNeeded()
-    }
-
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        removeRootEdgeGestureIfPresent()
-    }
-
-    func enableIfNeeded() {
-        guard let nav = navigationController else { return }
-        if nav.viewControllers.count > 1 {
-            // Deeper page: restore the native interactive-pop gesture and drop the root one.
-            removeRootEdgeGestureIfPresent()
-            NavigationUtil.enableInteractivePopGestureIfNeeded(for: nav)
+    private func dismiss() {
+        if dismissesPresentedViewController {
+            ViewControllerUtil.dismissPresented(animated: false) {
+                overlayController.dismissDialog()
+            }
         } else {
-            // Root page of the Digia overlay: native pop gesture has nothing to pop to,
-            // so attach a custom left-edge gesture that dismisses the entire overlay.
-            addRootEdgeGestureIfNeeded(to: nav.view)
-        }
-    }
-
-    // MARK: - Root-page edge gesture
-
-    private func addRootEdgeGestureIfNeeded(to view: UIView) {
-        guard rootEdgeGesture == nil else { return }
-        let gesture = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(handleRootEdgePan(_:)))
-        gesture.edges = .left
-        view.addGestureRecognizer(gesture)
-        rootEdgeGesture = gesture
-    }
-
-    private func removeRootEdgeGestureIfPresent() {
-        guard let gesture = rootEdgeGesture else { return }
-        gesture.view?.removeGestureRecognizer(gesture)
-        rootEdgeGesture = nil
-    }
-
-    @objc private func handleRootEdgePan(_ gesture: UIScreenEdgePanGestureRecognizer) {
-        guard gesture.state == .recognized else { return }
-        Task { @MainActor in
-            SDKInstance.shared.navigationController.pop()
+            overlayController.dismissDialog()
         }
     }
 }
 
-extension View {
+@MainActor
+private struct DigiaModalBottomSheetRootView<Content: View>: View {
+    let presentation: DigiaBottomSheetPresentation
+    let overlayController: DigiaOverlayController
+    @ObservedObject var transition: BottomSheetTransitionModel
+    let dismissesPresentedViewController: Bool
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        GeometryReader { geo in
+            let screenH = UIScreen.main.bounds.height
+            let layoutH = max(geo.size.height, screenH)
+            let maxAllowedHeight = layoutH * presentation.maxHeight
+            let clipShape = WidgetUtil.shape(for: presentation.cornerRadius)
+            let sheetMaxWidth = min(640, max(geo.size.width, UIScreen.main.bounds.width))
+            let safeAreaBottom: CGFloat = {
+                guard presentation.useSafeArea else { return 0 }
+                let windowInset = ViewControllerUtil.topViewController()?.view.window?.safeAreaInsets.bottom ?? 0
+                return max(windowInset, geo.safeAreaInsets.bottom)
+            }()
+
+            ZStack(alignment: .bottom) {
+                bottomSheetBarrierLayer()
+                    .opacity(transition.barrierOpacity)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(Rectangle())
+                    .allowsHitTesting(transition.barrierOpacity > 0.5)
+                    .onTapGesture {
+                        transition.animateDismiss {
+                            if dismissesPresentedViewController {
+                                ViewControllerUtil.dismissPresented(animated: false) {
+                                    overlayController.dismissBottomSheet()
+                                    SDKInstance.shared.didDismissBottomSheet()
+                                }
+                            } else {
+                                overlayController.dismissBottomSheet()
+                                SDKInstance.shared.didDismissBottomSheet()
+                            }
+                        }
+                    }
+
+                VStack(spacing: 0) {
+                    content()
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, safeAreaBottom)
+                .frame(maxWidth: sheetMaxWidth)
+                .frame(maxWidth: .infinity)
+                .frame(maxHeight: maxAllowedHeight, alignment: .top)
+                .background {
+                    digiaBottomSheetChromeBackground(clipShape: clipShape)
+                }
+                .clipShape(clipShape)
+                .overlay {
+                    digiaBottomSheetChromeStroke(clipShape: clipShape)
+                }
+                .offset(y: transition.sheetOffset)
+            }
+            .frame(width: max(geo.size.width, UIScreen.main.bounds.width), height: layoutH)
+            .onAppear {
+                transition.updateContainerHeight(layoutH)
+                transition.runEnterAnimationIfNeeded(containerHeight: layoutH)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.clear)
+        .ignoresSafeArea()
+    }
+
     @ViewBuilder
-    func digiaKeepSwipeBackGestureEnabled() -> some View {
-        self.background(DigiaInteractivePopGestureHost().frame(width: 0, height: 0))
+    private func bottomSheetBarrierLayer() -> some View {
+        presentation.barrierColor
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .ignoresSafeArea()
+    }
+
+    @ViewBuilder
+    private func digiaBottomSheetChromeBackground(clipShape: AnyShape) -> some View {
+        clipShape.fill(presentation.sheetBackgroundColor ?? Material3LightOverlay.surfaceContainer)
+    }
+
+    @ViewBuilder
+    private func digiaBottomSheetChromeStroke(clipShape: AnyShape) -> some View {
+        if presentation.shouldDrawBorder, let borderColor = presentation.borderColor {
+            clipShape.stroke(borderColor, lineWidth: presentation.effectiveBorderWidth)
+        }
     }
 }

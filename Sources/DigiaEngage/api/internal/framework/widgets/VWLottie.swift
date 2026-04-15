@@ -157,7 +157,7 @@ private struct LottieRepresentable: UIViewRepresentable {
             preconditionFailure("Invalid lottie URL: \(path)")
         }
         LottieAnimation.loadedFrom(url: url) { animation in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 host.animationView.animation = animation
                 completion()
             }
