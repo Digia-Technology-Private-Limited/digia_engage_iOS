@@ -65,6 +65,8 @@ private struct DigiaDialogRouteRootView<Content: View>: View {
     private let verticalInset: CGFloat = 24
     private let maxDialogWidthCap: CGFloat = 560
 
+    @State private var contentWidth: CGFloat = 0
+
     var body: some View {
         GeometryReader { geo in
             let safe = geo.safeAreaInsets
@@ -72,41 +74,48 @@ private struct DigiaDialogRouteRootView<Content: View>: View {
             let maxContentW = min(maxDialogWidthCap, max(0, availableW))
 
             ZStack {
-                if presentation.barrierDismissible {
-                    presentation.barrierColor
-                        .ignoresSafeArea()
-                        .contentShape(Rectangle())
-                        .onTapGesture {
+                presentation.barrierColor
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if presentation.barrierDismissible {
                             dismiss()
                         }
-                } else {
-                    presentation.barrierColor
-                        .ignoresSafeArea()
-                }
+                    }
 
                 VStack {
                     Spacer(minLength: 0)
+
                     content()
-                        .fixedSize(horizontal: false, vertical: true)
+                        .fixedSize(horizontal: true, vertical: true)
+                        .background(
+                            GeometryReader { proxy in
+                                Color.clear
+                                    .onAppear {
+                                        contentWidth = proxy.size.width
+                                    }
+                            }
+                        )
                         .frame(
-                            maxWidth: maxContentW,
+                            width: min(contentWidth, maxContentW) // ✅ hard clamp, no expansion
                         )
                         .background {
                             RoundedRectangle(cornerRadius: 28, style: .continuous)
                                 .fill(Material3LightOverlay.surfaceContainer)
                         }
                         .clipShape(
-                             AnyShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-                            )
+                            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        )
                         .shadow(
                             color: Color.black.opacity(0.12),
                             radius: 10,
                             x: 0,
                             y: 4
                         )
-                        .frame(maxWidth: .infinity, alignment: .center)
+
                     Spacer(minLength: 0)
                 }
+                .frame(maxWidth: .infinity) // center
                 .padding(.horizontal, horizontalInset)
                 .padding(.vertical, verticalInset)
             }
@@ -126,6 +135,8 @@ private struct DigiaDialogRouteRootView<Content: View>: View {
         }
     }
 }
+
+
 
 @MainActor
 private struct DigiaModalBottomSheetRootView<Content: View>: View {

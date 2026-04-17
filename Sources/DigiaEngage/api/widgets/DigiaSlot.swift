@@ -69,10 +69,9 @@ public struct DigiaSlot<Placeholder: View>: View {
 
 @MainActor
 public extension DigiaSlot where Placeholder == EmptyView {
-    /// Uses a 1pt-tall clear placeholder so `UIHostingController` / RN layout get a non-zero intrinsic height before a campaign arrives.
     init(_ placementKey: String) {
         self.init(placementKey) {
-            Color.clear.frame(minHeight: 1)
+            EmptyView()
         }
     }
 }
