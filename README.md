@@ -24,7 +24,7 @@ Add the package to your `Package.swift`:
 dependencies: [
     .package(
         url: "https://github.com/Digia-Technology-Private-Limited/digia_engage_ios.git",
-        from: "1.0.0-beta.1"
+        from: "1.0.0-beta.2"
     ),
 ]
 ```
