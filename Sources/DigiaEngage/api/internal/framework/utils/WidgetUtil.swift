@@ -155,9 +155,15 @@ enum WidgetUtil {
         _ rawValue: JSONValue?,
         payload: RenderPayload
     ) -> CornerRadiusProps? {
+        resolveCornerRadius(rawValue, scopeContext: payload.scopeContext as any ExprContext)
+    }
+
+    static func resolveCornerRadius(
+        _ rawValue: JSONValue?,
+        scopeContext: (any ExprContext)?
+    ) -> CornerRadiusProps? {
         guard let rawValue else { return nil }
-        let resolvedValue = ExpressionUtil.evaluateNestedExpressionsToAny(rawValue, in: payload.scopeContext)
-        return cornerRadius(from: resolvedValue)
+        return To.cornerRadius(rawValue.deepEvaluate(in: scopeContext))
     }
 
     static func shape(for cornerRadius: CornerRadiusProps) -> AnyShape {
@@ -167,75 +173,6 @@ enum WidgetUtil {
         return AnyShape(DigiaRoundedRect(cornerRadius: cornerRadius))
     }
 
-    private static func cornerRadius(from rawValue: Any?) -> CornerRadiusProps? {
-        switch rawValue {
-        case let value as Double:
-            return CornerRadiusProps(uniform: value)
-        case let value as Int:
-            return CornerRadiusProps(uniform: Double(value))
-        case let value as NSNumber:
-            return CornerRadiusProps(uniform: value.doubleValue)
-        case let value as String:
-            let parts = value
-                .split(separator: ",")
-                .compactMap { Double($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
-            switch parts.count {
-            case 1:
-                return CornerRadiusProps(uniform: parts[0])
-            case 4:
-                return CornerRadiusProps(
-                    topLeft: parts[0],
-                    topRight: parts[1],
-                    bottomRight: parts[2],
-                    bottomLeft: parts[3]
-                )
-            default:
-                return nil
-            }
-        case let values as [Any?]:
-            let parts = values.compactMap(doubleValue)
-            switch parts.count {
-            case 1:
-                return CornerRadiusProps(uniform: parts[0])
-            case 4:
-                return CornerRadiusProps(
-                    topLeft: parts[0],
-                    topRight: parts[1],
-                    bottomRight: parts[2],
-                    bottomLeft: parts[3]
-                )
-            default:
-                return nil
-            }
-        case let object as [String: Any?]:
-            return CornerRadiusProps(
-                topLeft: doubleValue(object["topLeft"]) ?? 0,
-                topRight: doubleValue(object["topRight"]) ?? 0,
-                bottomRight: doubleValue(object["bottomRight"]) ?? 0,
-                bottomLeft: doubleValue(object["bottomLeft"]) ?? 0
-            )
-        default:
-            return nil
-        }
-    }
-
-    private static func doubleValue(_ rawValue: Any?) -> Double? {
-        switch rawValue {
-        case let value as Double:
-            return value
-        case let value as Int:
-            return Double(value)
-        case let value as NSNumber:
-            return value.doubleValue
-        case let value as String:
-            return Double(value.trimmingCharacters(in: .whitespacesAndNewlines))
-        default:
-            return nil
-        }
-    }
-
-    /// Creates a `ScopeContext` for a single loop iteration.
-    /// Used by repeating widgets (Flex, Wrap) to scope `currentItem` and `index`.
     static func loopExprContext(_ item: Any?, index: Int, refName: String?) -> any ScopeContext {
         let loopObject: [String: Any?] = [
             "currentItem": item,

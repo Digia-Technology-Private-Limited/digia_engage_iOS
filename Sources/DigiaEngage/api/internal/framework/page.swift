@@ -63,6 +63,6 @@ private extension View {
     func digiaHideBackButton() -> some View {
         self
             .navigationBarBackButtonHidden(true)
-            .digiaKeepSwipeBackGestureEnabled()
     }
 }
+

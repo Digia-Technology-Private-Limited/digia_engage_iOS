@@ -50,7 +50,7 @@ enum ExprOr<Value: Codable & Equatable & Sendable>: Codable, Equatable, Sendable
 }
 
 extension ExprOr where Value == String {
-    func resolve(in context: (any ExprContext)?) -> String? {
+    func evaluate(in context: (any ExprContext)?) -> String? {
         switch self {
         case let .value(value):
             if ExpressionUtil.hasExpression(value) {
@@ -69,7 +69,7 @@ extension ExprOr where Value == String {
 }
 
 extension ExprOr where Value == Bool {
-    func resolve(in context: (any ExprContext)?) -> Bool? {
+    func evaluate(in context: (any ExprContext)?) -> Bool? {
         switch self {
         case let .value(value):
             return value
@@ -84,7 +84,7 @@ extension ExprOr where Value == Bool {
 }
 
 extension ExprOr where Value == Int {
-    func resolve(in context: (any ExprContext)?) -> Int? {
+    func evaluate(in context: (any ExprContext)?) -> Int? {
         switch self {
         case let .value(value):
             return value
@@ -100,7 +100,7 @@ extension ExprOr where Value == Int {
 }
 
 extension ExprOr where Value == Double {
-    func resolve(in context: (any ExprContext)?) -> Double? {
+    func evaluate(in context: (any ExprContext)?) -> Double? {
         switch self {
         case let .value(value):
             return value
@@ -112,5 +112,11 @@ extension ExprOr where Value == Double {
             }
             return nil
         }
+    }
+}
+
+extension JSONValue {
+    func deepEvaluate(in context: (any ExprContext)?) -> Any? {
+        ExpressionUtil.evaluateNestedExpressionsToAny(self, in: context)
     }
 }

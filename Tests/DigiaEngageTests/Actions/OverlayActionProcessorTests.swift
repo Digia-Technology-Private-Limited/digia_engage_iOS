@@ -58,6 +58,26 @@ struct OverlayActionProcessorTests {
         #expect(SDKInstance.shared.controller.activeBottomSheet?.view.args == ["name": .string("Ada")])
     }
 
+    @Test("showBottomSheet accepts integer borderWidth")
+    func showBottomSheetAcceptsIntegerBorderWidth() async throws {
+        SDKInstance.shared.resetForTesting()
+
+        try await ShowBottomSheetProcessor().execute(
+            action: ShowBottomSheetAction(
+                disableActionIf: nil,
+                data: [
+                    "componentId": .string("checkout_sheet"),
+                    "style": .object([
+                        "borderWidth": .int(10),
+                    ]),
+                ]
+            ),
+            context: context()
+        )
+
+        #expect(SDKInstance.shared.controller.activeBottomSheet?.borderWidth == CGFloat(10))
+    }
+
     @Test("showDialog forwards args into the presentation")
     func showDialogForwardsArgs() async throws {
         SDKInstance.shared.resetForTesting()

@@ -8,6 +8,7 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
     @Published private(set) var config: DigiaConfig?
     @Published private(set) var sdkState: SDKState = .notInitialized
     @Published private(set) var isHostMounted = false
+    @Published private(set) var isNavigationMounted = false
     @Published private(set) var appState: [String: JSONValue] = [:]
 
     private var activePlugin: DigiaCEPPlugin?
@@ -40,7 +41,6 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
 
     func initialize(_ config: DigiaConfig) async throws {
         guard self.config == nil else { return }
-        self.config = config
 
         let resolver = DigiaConfigResolver(config: config)
         let appConfig: DigiaAppConfig
@@ -49,11 +49,16 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         } else {
             appConfig = try await resolver.getConfigAsync()
         }
+        self.config = config
         appConfigStore.update(appConfig)
         navigationController.setInitialRoute(appConfig.initialRoute)
         try initializeAppState(from: appConfig, namespace: config.apiKey)
 
         sdkState = .ready
+
+        if let plugin = activePlugin, !plugin.healthCheck().isHealthy {
+            plugin.setup(delegate: self)
+        }
     }
 
     func register(_ plugin: DigiaCEPPlugin) {
@@ -82,12 +87,30 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         isHostMounted = false
     }
 
+    func onNavigationMounted() {
+        isNavigationMounted = true
+    }
+
+    func onNavigationUnmounted() {
+        isNavigationMounted = false
+    }
+
     func onCampaignTriggered(_ payload: InAppPayload) {
         let displayType = payload.content.type.lowercased()
-        let placementKey = payload.content.placementKey
+        let placementKey = payload.content.placementKey?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let viewId = payload.content.viewId?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let command = payload.content.command?.uppercased() ?? ""
 
-        if displayType == "inline", let placementKey {
-            inlineController.setCampaign(placementKey, payload: payload)
+        let routeInline: Bool = {
+            if displayType == "inline", let pk = placementKey, !pk.isEmpty { return true }
+            if let pk = placementKey, !pk.isEmpty, let vid = viewId, !vid.isEmpty {
+                if command.isEmpty || command == "SHOW_INLINE" { return true }
+            }
+            return false
+        }()
+
+        if routeInline, let pk = placementKey, !pk.isEmpty {
+            inlineController.setCampaign(pk, payload: payload)
         } else {
             controller.show(payload)
         }
@@ -100,9 +123,6 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         inlineController.removeCampaign(campaignID)
     }
 
-    /// Sets the stored config directly, simulating a completed initialization, without any
-    /// network calls or async work. Intended for tests that need to pre-seed state synchronously
-    /// before verifying guard-level idempotency (avoids suspension-point race conditions).
     func markInitializedForTesting(with config: DigiaConfig) {
         self.config = config
     }
@@ -113,6 +133,7 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         config = nil
         sdkState = .notInitialized
         isHostMounted = false
+        isNavigationMounted = false
         fontFactory = DefaultFontFactory()
         appConfigStore.clear()
         controller.dismiss()
@@ -214,33 +235,5 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
             let stream = AppStateValueStream(currentValue: appState[definition.name]?.anyValue)
             appStateStreams[definition.streamName] = stream
         }
-    }
-}
-
-@MainActor
-final class InlineCampaignController: ObservableObject {
-    @Published private var campaigns: [String: InAppPayload] = [:]
-    var onEvent: ((DigiaExperienceEvent, InAppPayload) -> Void)?
-
-    func getCampaign(_ placementKey: String) -> InAppPayload? {
-        campaigns[placementKey]
-    }
-
-    func setCampaign(_ placementKey: String, payload: InAppPayload) {
-        campaigns[placementKey] = payload
-    }
-
-    func removeCampaign(_ campaignID: String) {
-        campaigns = campaigns.filter { placementKey, payload in
-            placementKey != campaignID && payload.id != campaignID
-        }
-    }
-
-    func dismissCampaign(_ placementKey: String) {
-        campaigns.removeValue(forKey: placementKey)
-    }
-
-    func clear() {
-        campaigns.removeAll()
     }
 }

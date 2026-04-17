@@ -70,6 +70,8 @@ public struct DigiaSlot<Placeholder: View>: View {
 @MainActor
 public extension DigiaSlot where Placeholder == EmptyView {
     init(_ placementKey: String) {
-        self.init(placementKey) { EmptyView() }
+        self.init(placementKey) {
+            EmptyView()
+        }
     }
 }

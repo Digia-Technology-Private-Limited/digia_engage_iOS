@@ -11,9 +11,9 @@ struct CopyToClipBoardProcessor {
     let processorType: ActionType = .copyToClipBoard
 
     func execute(action: CopyToClipBoardAction, context: ActionProcessorContext) async throws {
-        guard let text = (ExpressionUtil.evaluateNestedExpressionsToAny(action.data["message"], in: context.scopeContext) as? String)
-            ?? (ExpressionUtil.evaluateNestedExpressionsToAny(action.data["text"], in: context.scopeContext) as? String)
-            ?? (ExpressionUtil.evaluateNestedExpressionsToAny(action.data["value"], in: context.scopeContext) as? String)
+        guard let text = (action.data["message"]?.deepEvaluate(in: context.scopeContext) as? String)
+            ?? (action.data["text"]?.deepEvaluate(in: context.scopeContext) as? String)
+            ?? (action.data["value"]?.deepEvaluate(in: context.scopeContext) as? String)
         else {
             throw ActionExecutionError.unsupportedContext(processorType)
         }

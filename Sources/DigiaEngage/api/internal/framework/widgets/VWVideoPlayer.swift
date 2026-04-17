@@ -150,7 +150,7 @@ private struct DigiaVideoPlayerView: View {
         .onDisappear {
             model.pause()
         }
-        .onChange(of: scenePhase) { phase in
+        .onChange(of: scenePhase, initial: false) { _, phase in
             switch phase {
             case .active:
                 if autoPlay {
@@ -191,9 +191,7 @@ private struct DigiaAVPlayerControllerView: UIViewControllerRepresentable {
         controller.player = player
         controller.showsPlaybackControls = showControls
         if autoPlay {
-            DispatchQueue.main.async {
-                player.play()
-            }
+            player.play()
         } else {
             player.pause()
         }
@@ -213,9 +211,7 @@ private struct DigiaAVPlayerLayerView: UIViewRepresentable {
     func updateUIView(_ uiView: DigiaPlayerLayerContainer, context _: Context) {
         uiView.playerLayer.player = player
         if autoPlay {
-            DispatchQueue.main.async {
-                player.play()
-            }
+            player.play()
         } else {
             player.pause()
         }

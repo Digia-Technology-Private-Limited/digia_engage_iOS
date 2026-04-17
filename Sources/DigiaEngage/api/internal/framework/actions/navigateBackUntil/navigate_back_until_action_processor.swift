@@ -11,7 +11,7 @@ struct NavigateBackUntilProcessor {
     let processorType: ActionType = .navigateBackUntil
 
     func execute(action: NavigateBackUntilAction, context: ActionProcessorContext) async throws {
-        let target = ExpressionUtil.evaluateNestedExpressionsToAny(action.data["routeNameToPopUntil"], in: context.scopeContext) as? String
+        let target = action.data["routeNameToPopUntil"]?.deepEvaluate(in: context.scopeContext) as? String
         guard let target else { throw ActionExecutionError.unsupportedContext(processorType) }
         let normalizedTarget = NavigationUtil.normalizedRoute(target)
         SDKInstance.shared.navigationController.popUntil { current in

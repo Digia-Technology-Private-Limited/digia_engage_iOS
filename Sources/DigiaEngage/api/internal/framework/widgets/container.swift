@@ -42,13 +42,20 @@ final class VWContainer: VirtualStatelessWidget<ContainerProps> {
         let fallbackMinHeight: CGFloat? = child == nil && height == nil && hasVisibleDecoration ? 1 : nil
         let childAlignment = To.alignment(props.childAlignment)
 
-        var content = child?.toWidget(payload)
-            ?? AnyView(
-                Color.clear.frame(
-                    minWidth: fallbackMinWidth,
-                    minHeight: fallbackMinHeight
+        var content: AnyView = {
+            if let child {
+                return child.toWidget(payload)
+            }
+            if fallbackMinWidth != nil || fallbackMinHeight != nil {
+                return AnyView(
+                    Color.clear.frame(
+                        minWidth: fallbackMinWidth,
+                        minHeight: fallbackMinHeight
+                    )
                 )
-            )
+            }
+            return AnyView(EmptyView())
+        }()
         if let padding = props.padding?.edgeInsets {
             content = AnyView(content.padding(padding))
         }
@@ -144,7 +151,7 @@ final class VWContainer: VirtualStatelessWidget<ContainerProps> {
 
     private var shouldFillAvailableHeight: Bool {
         if parent is VWGridView {
-            return true
+            return false
         }
 
         if let flexParent = parent as? VWFlex,
