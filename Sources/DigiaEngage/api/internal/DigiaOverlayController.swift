@@ -6,6 +6,7 @@ final class DigiaOverlayController: ObservableObject {
     @Published private(set) var activeBottomSheet: DigiaBottomSheetPresentation?
     @Published private(set) var activeDialog: DigiaDialogPresentation?
     @Published private(set) var activeToast: DigiaToastPresentation?
+    @Published private(set) var activePip: PipRequest?
     @Published private(set) var slotPayloads: [String: InAppPayload] = [:]
 
     private var toastToken = UUID()
@@ -60,6 +61,23 @@ final class DigiaOverlayController: ObservableObject {
 
     func dismissToast() {
         activeToast = nil
+    }
+
+    func showPip(_ request: PipRequest) {
+        activePip = request
+    }
+
+    func dismissPip() {
+        activePip = nil
+    }
+
+    /// Call when the active screen changes (e.g. from a NavigationStack onChange or UIViewController viewDidAppear).
+    /// Dismisses PiP if `closeOnScreenChange` is true or the new screen is blocked by `screenFilter`.
+    func onScreenChanged(_ screenName: String) {
+        guard let pip = activePip else { return }
+        let shouldDismiss = pip.closeOnScreenChange ||
+            pip.screenFilter.map { !$0.isAllowed(screenName) } ?? false
+        if shouldDismiss { dismissPip() }
     }
 
     func addSlot(_ placementKey: String, payload: InAppPayload) {

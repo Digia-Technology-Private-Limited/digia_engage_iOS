@@ -31,6 +31,11 @@ public struct DigiaHost<Content: View>: View {
 
             DigiaToastOverlay(toast: controller.activeToast)
                 .zIndex(2)
+
+            if let pip = controller.activePip {
+                PipOverlay(request: pip, onDismiss: { controller.dismissPip() })
+                    .zIndex(3)
+            }
         }
         .onChange(of: controller.activePayload, initial: false) { _, payload in
             handlePayload(payload)
@@ -80,6 +85,20 @@ public struct DigiaHost<Content: View>: View {
                 controller.onEvent?(.dismissed, payload)
                 controller.dismiss()
             }
+        case .pip:
+            var data = actionData(viewID: viewID, args: args)
+            // Merge top-level payload args into action data for pip-specific fields
+            for (key, value) in payload.content.args { data[key] = value }
+            let action = ShowPipAction(disableActionIf: nil, data: data)
+            Task { @MainActor in
+                do {
+                    try await ShowPipProcessor().execute(action: action, context: context)
+                } catch {
+                    assertionFailure("Failed to show PiP: \(error)")
+                }
+                controller.onEvent?(.impressed, payload)
+                controller.dismiss()
+            }
         }
     }
 
@@ -117,11 +136,14 @@ private struct DigiaToastOverlay: View {
 private enum PayloadCommand {
     case dialog
     case bottomSheet
+    case pip
 
     init(rawValue: String?) {
         switch rawValue?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() {
         case "SHOW_BOTTOM_SHEET", "BOTTOMSHEET":
             self = .bottomSheet
+        case "SHOW_PIP", "PIP":
+            self = .pip
         default:
             self = .dialog
         }

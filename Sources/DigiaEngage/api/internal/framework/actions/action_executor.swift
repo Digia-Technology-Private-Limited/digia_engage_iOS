@@ -86,6 +86,10 @@ final class ActionExecutor {
             try await HideBottomSheetProcessor().execute(action: model, context: context)
         case let .dismissDialog(model):
             try await DismissDialogProcessor().execute(action: model, context: context)
+        case let .showPip(model):
+            try await ShowPipProcessor().execute(action: model, context: context)
+        case let .dismissPip(model):
+            try await DismissPipProcessor().execute(action: model, context: context)
         }
     }
 }

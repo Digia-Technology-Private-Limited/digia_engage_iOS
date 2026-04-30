@@ -19,6 +19,8 @@ enum ActionType: String, CaseIterable, Codable, Sendable {
     case setAppState = "Action.setAppState"
     case hideBottomSheet = "Action.hideBottomSheet"
     case dismissDialog = "Action.dismissDialog"
+    case showPip = "Action.showPip"
+    case dismissPip = "Action.dismissPip"
 }
 
 enum DigiaActionModel: Sendable {
@@ -40,6 +42,8 @@ enum DigiaActionModel: Sendable {
     case setAppState(SetAppStateAction)
     case hideBottomSheet(HideBottomSheetAction)
     case dismissDialog(DismissDialogAction)
+    case showPip(ShowPipAction)
+    case dismissPip(DismissPipAction)
 }
 
 extension DigiaActionModel {
@@ -63,6 +67,8 @@ extension DigiaActionModel {
         case .setAppState: return .setAppState
         case .hideBottomSheet: return .hideBottomSheet
         case .dismissDialog: return .dismissDialog
+        case .showPip: return .showPip
+        case .dismissPip: return .dismissPip
         }
     }
 
@@ -86,6 +92,8 @@ extension DigiaActionModel {
         case let .setAppState(action): return action.disableActionIf
         case let .hideBottomSheet(action): return action.disableActionIf
         case let .dismissDialog(action): return action.disableActionIf
+        case let .showPip(action): return action.disableActionIf
+        case let .dismissPip(action): return action.disableActionIf
         }
     }
 }

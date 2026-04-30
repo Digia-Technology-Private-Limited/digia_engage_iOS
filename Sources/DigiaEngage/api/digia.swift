@@ -26,4 +26,10 @@ public enum Digia {
     public static func removeMessageListener(_ name: String, token: UUID) {
         SDKInstance.shared.removeMessageListener(name: name, token: token)
     }
+
+    /// Call when the active screen changes so PiP can dismiss itself if configured to do so.
+    /// Integrate with NavigationStack's `.onChange(of: path)` or UIViewController's `viewDidAppear`.
+    public static func onScreenChanged(_ screenName: String) {
+        SDKInstance.shared.controller.onScreenChanged(screenName)
+    }
 }

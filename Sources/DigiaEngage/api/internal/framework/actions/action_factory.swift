@@ -52,6 +52,10 @@ enum ActionFactory {
             return .hideBottomSheet(HideBottomSheetAction(disableActionIf: step.disableActionIf, data: data))
         case .dismissDialog:
             return .dismissDialog(DismissDialogAction(disableActionIf: step.disableActionIf, data: data))
+        case .showPip:
+            return .showPip(ShowPipAction(disableActionIf: step.disableActionIf, data: data))
+        case .dismissPip:
+            return .dismissPip(DismissPipAction(disableActionIf: step.disableActionIf, data: data))
         }
     }
 }
