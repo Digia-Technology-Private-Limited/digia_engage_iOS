@@ -36,7 +36,16 @@ public struct DigiaHost<Content: View>: View {
                 PipOverlay(request: pip, onDismiss: { controller.dismissPip() })
                     .zIndex(3)
             }
+
+            if let tooltip = controller.activeTooltip {
+                TooltipOverlay(request: tooltip, onDismiss: { controller.dismissTooltip() })
+                    .zIndex(4)
+            }
         }
+        // Named coordinate space anchors the origin of the ZStack so both digiaLabel
+        // (label registration) and TooltipOverlay (bubble positioning) share the same
+        // reference frame, avoiding any safe-area offset mismatch.
+        .coordinateSpace(name: DigiaCoordinateSpaceName.overlay)
         .onChange(of: controller.activePayload, initial: false) { _, payload in
             handlePayload(payload)
         }
@@ -99,6 +108,22 @@ public struct DigiaHost<Content: View>: View {
                 controller.onEvent?(.impressed, payload)
                 controller.dismiss()
             }
+        case .tooltip:
+            var data = actionData(viewID: viewID, args: args)
+            for (key, value) in payload.content.args { data[key] = value }
+            if let placementKey = payload.content.placementKey {
+                data["placementKey"] = .string(placementKey)
+            }
+            let action = ShowTooltipAction(disableActionIf: nil, data: data)
+            Task { @MainActor in
+                do {
+                    try await ShowTooltipProcessor().execute(action: action, context: context)
+                } catch {
+                    assertionFailure("Failed to show tooltip: \(error)")
+                }
+                controller.onEvent?(.impressed, payload)
+                controller.dismiss()
+            }
         }
     }
 
@@ -137,6 +162,7 @@ private enum PayloadCommand {
     case dialog
     case bottomSheet
     case pip
+    case tooltip
 
     init(rawValue: String?) {
         switch rawValue?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() {
@@ -144,6 +170,8 @@ private enum PayloadCommand {
             self = .bottomSheet
         case "SHOW_PIP", "PIP":
             self = .pip
+        case "SHOW_TOOLTIP", "TOOLTIP":
+            self = .tooltip
         default:
             self = .dialog
         }

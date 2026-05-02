@@ -90,6 +90,10 @@ final class ActionExecutor {
             try await ShowPipProcessor().execute(action: model, context: context)
         case let .dismissPip(model):
             try await DismissPipProcessor().execute(action: model, context: context)
+        case let .showTooltip(model):
+            try await ShowTooltipProcessor().execute(action: model, context: context)
+        case let .dismissTooltip(model):
+            try await DismissTooltipProcessor().execute(action: model, context: context)
         }
     }
 }

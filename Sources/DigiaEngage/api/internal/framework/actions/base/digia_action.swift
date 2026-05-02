@@ -21,6 +21,8 @@ enum ActionType: String, CaseIterable, Codable, Sendable {
     case dismissDialog = "Action.dismissDialog"
     case showPip = "Action.showPip"
     case dismissPip = "Action.dismissPip"
+    case showTooltip = "Action.showTooltip"
+    case dismissTooltip = "Action.dismissTooltip"
 }
 
 enum DigiaActionModel: Sendable {
@@ -44,6 +46,8 @@ enum DigiaActionModel: Sendable {
     case dismissDialog(DismissDialogAction)
     case showPip(ShowPipAction)
     case dismissPip(DismissPipAction)
+    case showTooltip(ShowTooltipAction)
+    case dismissTooltip(DismissTooltipAction)
 }
 
 extension DigiaActionModel {
@@ -69,6 +73,8 @@ extension DigiaActionModel {
         case .dismissDialog: return .dismissDialog
         case .showPip: return .showPip
         case .dismissPip: return .dismissPip
+        case .showTooltip: return .showTooltip
+        case .dismissTooltip: return .dismissTooltip
         }
     }
 
@@ -94,6 +100,8 @@ extension DigiaActionModel {
         case let .dismissDialog(action): return action.disableActionIf
         case let .showPip(action): return action.disableActionIf
         case let .dismissPip(action): return action.disableActionIf
+        case let .showTooltip(action): return action.disableActionIf
+        case let .dismissTooltip(action): return action.disableActionIf
         }
     }
 }

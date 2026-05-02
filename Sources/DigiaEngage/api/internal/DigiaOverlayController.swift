@@ -7,6 +7,7 @@ final class DigiaOverlayController: ObservableObject {
     @Published private(set) var activeDialog: DigiaDialogPresentation?
     @Published private(set) var activeToast: DigiaToastPresentation?
     @Published private(set) var activePip: PipRequest?
+    @Published private(set) var activeTooltip: TooltipRequest?
     @Published private(set) var slotPayloads: [String: InAppPayload] = [:]
 
     private var toastToken = UUID()
@@ -69,6 +70,16 @@ final class DigiaOverlayController: ObservableObject {
 
     func dismissPip() {
         activePip = nil
+    }
+
+    func showTooltip(_ request: TooltipRequest) {
+        activeTooltip = request
+    }
+
+    func dismissTooltip(result: Any? = nil) {
+        let req = activeTooltip
+        activeTooltip = nil
+        req?.onDismiss?(result)
     }
 
     /// Call when the active screen changes (e.g. from a NavigationStack onChange or UIViewController viewDidAppear).

@@ -56,6 +56,10 @@ enum ActionFactory {
             return .showPip(ShowPipAction(disableActionIf: step.disableActionIf, data: data))
         case .dismissPip:
             return .dismissPip(DismissPipAction(disableActionIf: step.disableActionIf, data: data))
+        case .showTooltip:
+            return .showTooltip(ShowTooltipAction(disableActionIf: step.disableActionIf, data: data))
+        case .dismissTooltip:
+            return .dismissTooltip(DismissTooltipAction(disableActionIf: step.disableActionIf, data: data))
         }
     }
 }
