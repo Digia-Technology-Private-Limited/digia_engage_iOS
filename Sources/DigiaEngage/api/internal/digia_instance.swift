@@ -8,6 +8,7 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
     @Published private(set) var config: DigiaConfig?
     @Published private(set) var sdkState: SDKState = .notInitialized
     @Published private(set) var isHostMounted = false
+    @Published private(set) var isNavigationMounted = false
     @Published private(set) var appState: [String: JSONValue] = [:]
 
     private var activePlugin: DigiaCEPPlugin?
@@ -82,6 +83,14 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         isHostMounted = false
     }
 
+    func onNavigationMounted() {
+        isNavigationMounted = true
+    }
+
+    func onNavigationUnmounted() {
+        isNavigationMounted = false
+    }
+
     func onCampaignTriggered(_ payload: InAppPayload) {
         let displayType = payload.content.type.lowercased()
         let placementKey = payload.content.placementKey
@@ -113,6 +122,7 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         config = nil
         sdkState = .notInitialized
         isHostMounted = false
+        isNavigationMounted = false
         fontFactory = DefaultFontFactory()
         appConfigStore.clear()
         controller.dismiss()
@@ -227,7 +237,9 @@ final class InlineCampaignController: ObservableObject {
     }
 
     func setCampaign(_ placementKey: String, payload: InAppPayload) {
-        campaigns[placementKey] = payload
+        var next = campaigns
+        next[placementKey] = payload
+        campaigns = next
     }
 
     func removeCampaign(_ campaignID: String) {

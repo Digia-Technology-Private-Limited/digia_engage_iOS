@@ -9,7 +9,7 @@ final class Debouncer {
         self.delay = delay
     }
 
-    func run(_ action: @escaping @Sendable () async -> Void) {
+    func run(_ action: @escaping () async -> Void) {
         task?.cancel()
         task = Task {
             try? await Task.sleep(for: delay)

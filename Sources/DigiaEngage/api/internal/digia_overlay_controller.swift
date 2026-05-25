@@ -2,6 +2,14 @@ import Foundation
 import Combine
 import SwiftUI
 
+struct AnchoredOverlayState: Equatable, Sendable {
+    let payload: InAppPayload
+    let anchorKey: String
+    let anchorRect: CGRect
+    let command: String          // "SHOW_TOOLTIP" or "SHOW_SPOTLIGHT"
+    let cornerRadius: CGFloat    // spotlight cutout corner radius
+}
+
 struct DigiaViewPresentation: Equatable, Sendable {
     let viewID: String
     let title: String?
@@ -59,6 +67,7 @@ final class DigiaOverlayController: ObservableObject {
     @Published private(set) var activeDialog: DigiaDialogPresentation?
     @Published private(set) var activeToast: DigiaToastPresentation?
     @Published private(set) var slotPayloads: [String: InAppPayload] = [:]
+    @Published private(set) var activeAnchoredOverlay: AnchoredOverlayState?
 
     private var toastToken = UUID()
     var onEvent: ((DigiaExperienceEvent, InAppPayload) -> Void)?
@@ -126,5 +135,13 @@ final class DigiaOverlayController: ObservableObject {
 
     func clearSlots() {
         slotPayloads.removeAll()
+    }
+
+    func showAnchored(_ state: AnchoredOverlayState) {
+        activeAnchoredOverlay = state
+    }
+
+    func dismissAnchored() {
+        activeAnchoredOverlay = nil
     }
 }

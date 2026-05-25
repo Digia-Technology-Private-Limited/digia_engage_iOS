@@ -184,9 +184,9 @@ final class StoryPlaybackCoordinator: ObservableObject {
     private var playerObserver: Any?
     private var endObserver: NSObjectProtocol?
 
-    private let onCompleted: (@Sendable () -> Void)?
-    private let onPreviousCompleted: (@Sendable () -> Void)?
-    private let onStoryChanged: (@Sendable (Int) -> Void)?
+    private let onCompleted: (() -> Void)?
+    private let onPreviousCompleted: (() -> Void)?
+    private let onStoryChanged: ((Int) -> Void)?
 
     enum Mode: Equatable {
         case detectingVideo
@@ -199,9 +199,9 @@ final class StoryPlaybackCoordinator: ObservableObject {
         initialIndex: Int,
         repeatOnCompleted: Bool,
         defaultDuration: Double,
-        onCompleted: (@Sendable () -> Void)?,
-        onPreviousCompleted: (@Sendable () -> Void)?,
-        onStoryChanged: (@Sendable (Int) -> Void)?
+        onCompleted: (() -> Void)?,
+        onPreviousCompleted: (() -> Void)?,
+        onStoryChanged: ((Int) -> Void)?
     ) {
         self.pageCount = max(pageCount, 0)
         self.repeatOnCompleted = repeatOnCompleted
@@ -377,13 +377,13 @@ private struct DigiaStoryView: View {
     let header: AnyView?
     let footer: AnyView?
     let controller: DigiaStoryController?
-    let onCompleted: (@Sendable () -> Void)?
-    let onSlideStart: (@Sendable () -> Void)?
-    let onSlideDown: (@Sendable () -> Void)?
-    let onLeftTap: (@Sendable () async -> Bool)?
-    let onRightTap: (@Sendable () async -> Bool)?
-    let onPreviousCompleted: (@Sendable () -> Void)?
-    let onStoryChanged: (@Sendable (Int) -> Void)?
+    let onCompleted: (() -> Void)?
+    let onSlideStart: (() -> Void)?
+    let onSlideDown: (() -> Void)?
+    let onLeftTap: (() async -> Bool)?
+    let onRightTap: (() async -> Bool)?
+    let onPreviousCompleted: (() -> Void)?
+    let onStoryChanged: ((Int) -> Void)?
 
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var coordinator: StoryPlaybackCoordinator
@@ -398,13 +398,13 @@ private struct DigiaStoryView: View {
         header: AnyView?,
         footer: AnyView?,
         controller: DigiaStoryController?,
-        onCompleted: (@Sendable () -> Void)?,
-        onSlideStart: (@Sendable () -> Void)?,
-        onSlideDown: (@Sendable () -> Void)?,
-        onLeftTap: (@Sendable () async -> Bool)?,
-        onRightTap: (@Sendable () async -> Bool)?,
-        onPreviousCompleted: (@Sendable () -> Void)?,
-        onStoryChanged: (@Sendable (Int) -> Void)?
+        onCompleted: (() -> Void)?,
+        onSlideStart: (() -> Void)?,
+        onSlideDown: (() -> Void)?,
+        onLeftTap: (() async -> Bool)?,
+        onRightTap: (() async -> Bool)?,
+        onPreviousCompleted: (() -> Void)?,
+        onStoryChanged: ((Int) -> Void)?
     ) {
         self.pages = pages
         self.initialIndex = initialIndex

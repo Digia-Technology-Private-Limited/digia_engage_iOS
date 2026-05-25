@@ -209,13 +209,23 @@ enum WidgetUtil {
             }
         case let object as [String: Any?]:
             return CornerRadiusProps(
-                topLeft: doubleValue(object["topLeft"]) ?? 0,
-                topRight: doubleValue(object["topRight"]) ?? 0,
-                bottomRight: doubleValue(object["bottomRight"]) ?? 0,
-                bottomLeft: doubleValue(object["bottomLeft"]) ?? 0
+                topLeft: doubleValue(optionalDictValue(object, key: "topLeft")) ?? 0,
+                topRight: doubleValue(optionalDictValue(object, key: "topRight")) ?? 0,
+                bottomRight: doubleValue(optionalDictValue(object, key: "bottomRight")) ?? 0,
+                bottomLeft: doubleValue(optionalDictValue(object, key: "bottomLeft")) ?? 0
             )
         default:
             return nil
+        }
+    }
+
+    /// Flattens `[String: Any?]` subscript `Any??` → `Any?` for typed helpers.
+    private static func optionalDictValue(_ object: [String: Any?], key: String) -> Any? {
+        switch object[key] {
+        case .none:
+            return nil
+        case let .some(value):
+            return value
         }
     }
 

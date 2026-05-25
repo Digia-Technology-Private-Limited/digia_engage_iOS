@@ -29,8 +29,10 @@ struct DigiaNavigationView: View {
             }
             .ignoresSafeArea()
             .onAppear {
+                SDKInstance.shared.onNavigationMounted()
                 SDKInstance.shared.navigationController.setInitialRoute(initialRoute)
             }
+            .onDisappear { SDKInstance.shared.onNavigationUnmounted() }
         } else if let error = store.lastError {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Digia load failed")

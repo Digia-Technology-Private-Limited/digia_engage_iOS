@@ -211,7 +211,7 @@ final class DigiaTimerController: DigiaValueStream, ExprInstance, @unchecked Sen
     }
 
     func unsubscribe(_ token: UUID) {
-        stateQueue.sync {
+        _ = stateQueue.sync {
             listeners.removeValue(forKey: token)
         }
     }
@@ -226,7 +226,7 @@ final class DigiaTimerController: DigiaValueStream, ExprInstance, @unchecked Sen
     }
 
     func unsubscribeCompletion(_ token: UUID) {
-        stateQueue.sync {
+        _ = stateQueue.sync {
             completionListeners.removeValue(forKey: token)
         }
     }

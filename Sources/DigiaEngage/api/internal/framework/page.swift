@@ -54,15 +54,5 @@ struct DUIPageView: View {
             .onDisappear {
                 SDKInstance.shared.unregisterStateContext(self.stateStore)
             }
-            .digiaHideBackButton()
-    }
-}
-
-private extension View {
-    @ViewBuilder
-    func digiaHideBackButton() -> some View {
-        self
-            .navigationBarBackButtonHidden(true)
-            .digiaKeepSwipeBackGestureEnabled()
     }
 }

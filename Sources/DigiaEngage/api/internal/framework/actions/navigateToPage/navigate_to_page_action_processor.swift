@@ -1,4 +1,6 @@
 import Foundation
+import SwiftUI
+import UIKit
 
 struct NavigateToPageAction: Sendable {
     let actionType: ActionType = .navigateToPage
@@ -30,6 +32,10 @@ struct NavigateToPageProcessor {
         ) as? Bool) ?? false
 
         let onResultFlow = action.data["onResult"]?.asActionFlow()
+        if !SDKInstance.shared.isNavigationMounted {
+            presentPageModally(pageID: pageID, args: args)
+            return
+        }
 
         if removePrevious {
             SDKInstance.shared.navigationController.replaceStack(with: pageID, args: args)
@@ -51,5 +57,11 @@ struct NavigateToPageProcessor {
         } else {
             SDKInstance.shared.navigationController.push(pageID, args: args)
         }
+    }
+
+    private func presentPageModally(pageID: String, args: [String: JSONValue]) {
+        let controller = UIHostingController(rootView: DUIFactory.shared.createPage(pageID, pageArgs: args))
+        controller.modalPresentationStyle = .fullScreen
+        ViewControllerUtil.present(controller)
     }
 }

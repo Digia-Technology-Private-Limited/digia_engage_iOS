@@ -106,7 +106,7 @@ final class DigiaNavigationController: ObservableObject {
     func pop(result: JSONValue? = nil) {
         guard !path.isEmpty else { return }
         let entry = path.last!
-        withAnimation(Self.popAnimation) { path.removeLast() }
+        _ = withAnimation(Self.popAnimation) { path.removeLast() }
         entryArgs.removeValue(forKey: entry.id)
         resultContinuations.removeValue(forKey: entry.id)?.resume(returning: result)
     }
