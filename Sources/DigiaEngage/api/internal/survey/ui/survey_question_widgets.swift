@@ -201,23 +201,24 @@ private struct NpsQuestion: View {
                     Button {
                         onAnswer(SurveyAnswer(values: ["\(i)"]))
                     } label: {
-                        Text("\(i)")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(isOn ? .white : SurveyTokens.textPrimary)
-                            .frame(maxWidth: .infinity)
-                            .aspectRatio(1, contentMode: .fit)
-                            .background(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(isOn ? accent : SurveyTokens.surfaceSunken)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(isOn ? accent : SurveyTokens.border, lineWidth: 1)
-                            )
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(isOn ? accent : SurveyTokens.surfaceSunken)
+                                .aspectRatio(1, contentMode: .fit)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .stroke(isOn ? accent : SurveyTokens.border, lineWidth: 1)
+                                )
+                            Text("\(i)")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(isOn ? .white : SurveyTokens.textPrimary)
+                        }
+                        .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.plain)
                 }
             }
+            .frame(maxWidth: .infinity)
             HStack {
                 Text("Not likely").font(.system(size: 11)).foregroundColor(SurveyTokens.textTertiary)
                 Spacer()
@@ -435,39 +436,39 @@ private struct ChoiceCardQuestion: View {
         let otherSelected = selected[OTHER_CHOICE_ID] == true
         let options = block.options + (block.allowOther ? [SurveyOption(id: OTHER_CHOICE_ID, label: "Other…", description: nil, media: nil)] : [])
 
-        VStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
+            let card: (SurveyOption) -> ChoiceCardRow = { option in
+                ChoiceCardRow(
+                    option: option,
+                    selected: selected[option.id] == true,
+                    multi: multi,
+                    accent: accent,
+                    showMedia: block.showAnswerMedia,
+                    showDescription: block.showAnswerDescriptions,
+                    wide: true,
+                    onTap: { toggle(option.id, multi: multi) }
+                )
+            }
             switch block.answerLayout {
-            case .row, .grid:
-                FlowLayout(spacing: 8) {
-                    ForEach(options) { option in
-                        ChoiceCardRow(
-                            option: option,
-                            selected: selected[option.id] == true,
-                            multi: multi,
-                            accent: accent,
-                            showMedia: block.showAnswerMedia,
-                            showDescription: block.showAnswerDescriptions,
-                            wide: false,
-                            onTap: { toggle(option.id, multi: multi) }
-                        )
-                        .frame(minWidth: 150)
-                    }
+            case .row:
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 150), spacing: 8)],
+                    alignment: .leading,
+                    spacing: 8
+                ) {
+                    ForEach(options) { card($0) }
                 }
-                .frame(maxWidth: .infinity)
+            case .grid:
+                LazyVGrid(
+                    columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)],
+                    alignment: .leading,
+                    spacing: 8
+                ) {
+                    ForEach(options) { card($0) }
+                }
             case .column:
                 VStack(spacing: 8) {
-                    ForEach(options) { option in
-                        ChoiceCardRow(
-                            option: option,
-                            selected: selected[option.id] == true,
-                            multi: multi,
-                            accent: accent,
-                            showMedia: block.showAnswerMedia,
-                            showDescription: block.showAnswerDescriptions,
-                            wide: true,
-                            onTap: { toggle(option.id, multi: multi) }
-                        )
-                    }
+                    ForEach(options) { card($0) }
                 }
             }
 
@@ -486,6 +487,7 @@ private struct ChoiceCardQuestion: View {
                 .frame(maxWidth: .infinity)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear {
             guard !hydrated else { return }
             hydrated = true
