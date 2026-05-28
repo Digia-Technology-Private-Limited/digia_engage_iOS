@@ -37,6 +37,9 @@ public struct InAppPayloadContent: Sendable, Codable, Equatable {
     public let screenId: String?
     /// Anchor key referencing a registered DigiaAnchorView (used for SHOW_TOOLTIP / SHOW_SPOTLIGHT).
     public let anchorKey: String?
+    /// Campaign key set by native CEP plugins (e.g. CleverTap). When present, the SDK resolves the
+    /// full campaign from the CampaignStore and routes by campaignType, ignoring the typed fields.
+    public let campaignKey: String?
 
     public init(
         type: String,
@@ -47,7 +50,8 @@ public struct InAppPayloadContent: Sendable, Codable, Equatable {
         command: String? = nil,
         args: [String: JSONValue] = [:],
         screenId: String? = nil,
-        anchorKey: String? = nil
+        anchorKey: String? = nil,
+        campaignKey: String? = nil
     ) {
         self.type = type
         self.placementKey = placementKey
@@ -58,6 +62,7 @@ public struct InAppPayloadContent: Sendable, Codable, Equatable {
         self.args = args
         self.screenId = screenId
         self.anchorKey = anchorKey
+        self.campaignKey = campaignKey
     }
 
     enum CodingKeys: String, CodingKey {
@@ -70,6 +75,7 @@ public struct InAppPayloadContent: Sendable, Codable, Equatable {
         case args
         case screenId
         case anchorKey
+        case campaignKey
     }
 
     public init(from decoder: Decoder) throws {
@@ -83,6 +89,7 @@ public struct InAppPayloadContent: Sendable, Codable, Equatable {
         args = try container.decodeIfPresent([String: JSONValue].self, forKey: .args) ?? [:]
         screenId = try container.decodeIfPresent(String.self, forKey: .screenId)
         anchorKey = try container.decodeIfPresent(String.self, forKey: .anchorKey)
+        campaignKey = try container.decodeIfPresent(String.self, forKey: .campaignKey)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -98,5 +105,6 @@ public struct InAppPayloadContent: Sendable, Codable, Equatable {
         }
         try container.encodeIfPresent(screenId, forKey: .screenId)
         try container.encodeIfPresent(anchorKey, forKey: .anchorKey)
+        try container.encodeIfPresent(campaignKey, forKey: .campaignKey)
     }
 }

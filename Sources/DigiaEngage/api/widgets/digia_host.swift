@@ -51,6 +51,9 @@ public struct DigiaHost<Content: View>: View {
                     }
                 )
             }
+
+            // Native multi-step guide overlay (campaign_key path)
+            GuideOverlayView()
         }
         .onChange(of: controller.activePayload) { payload in
             handlePayload(payload)

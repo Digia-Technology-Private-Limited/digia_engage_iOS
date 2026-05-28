@@ -18,8 +18,10 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
     private var localStateStores: [String: StateContext] = [:]
 
     let appConfigStore = AppConfigStore()
+    let campaignStore = CampaignStore()
     let controller = DigiaOverlayController()
     let inlineController = InlineCampaignController()
+    let guideOrchestrator = GuideOrchestrator()
     let navigationController = DigiaNavigationController()
 
     private(set) var appStateStreams: [String: AppStateValueStream] = [:]
@@ -43,18 +45,23 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         guard self.config == nil else { return }
         self.config = config
 
-        let resolver = DigiaConfigResolver(config: config)
-        let appConfig: DigiaAppConfig
-        if let cached = try? resolver.getConfig() {
-            appConfig = cached
-        } else {
-            appConfig = try await resolver.getConfigAsync()
+        do {
+            let campaigns = try await CampaignFetcher(config: config).fetch()
+            campaignStore.populate(campaigns)
+            if campaignStore.isEmpty {
+                logVerbose("No campaigns fetched — CampaignStore is empty")
+            }
+        } catch {
+            // Campaign fetch failure must not block SDK readiness.
+            logVerbose("CampaignFetcher failed: \(error)")
         }
-        appConfigStore.update(appConfig)
-        navigationController.setInitialRoute(appConfig.initialRoute)
-        try initializeAppState(from: appConfig, namespace: config.apiKey)
 
         sdkState = .ready
+    }
+
+    private func logVerbose(_ message: String) {
+        guard config?.logLevel == .verbose else { return }
+        print("Digia [SDKInstance] \(message)")
     }
 
     func register(_ plugin: DigiaCEPPlugin) {
@@ -92,6 +99,14 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
     }
 
     func onCampaignTriggered(_ payload: InAppPayload) {
+        // campaign_key path (native CEP plugins, e.g. CleverTap): resolve the full
+        // campaign from the store and route by campaignType, mirroring Android.
+        if let campaignKey = payload.content.campaignKey, !campaignKey.isEmpty {
+            routeByCampaignKey(campaignKey, payload: payload)
+            return
+        }
+
+        // Typed path (RN/JS-driven): content already carries display info.
         let displayType = payload.content.type.lowercased()
         let placementKey = payload.content.placementKey
 
@@ -102,11 +117,36 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         }
     }
 
+    private func routeByCampaignKey(_ key: String, payload: InAppPayload) {
+        guard let campaign = campaignStore.find(key) else {
+            logVerbose("campaign_key path: no campaign found for key '\(key)'")
+            return
+        }
+
+        switch campaign.config {
+        case let .inline(cfg):
+            let routed = InAppPayload(
+                id: payload.id,
+                content: InAppPayloadContent(type: "inline", placementKey: cfg.slotKey, campaignKey: key),
+                cepContext: payload.cepContext
+            )
+            inlineController.setCarouselConfig(cfg.slotKey, config: cfg)
+            inlineController.setCampaign(cfg.slotKey, payload: routed)
+        case .story:
+            logVerbose("campaign_key path: story campaigns not supported natively yet (key '\(key)')")
+        case .guide:
+            guideOrchestrator.start(campaign)
+        case .nudge:
+            controller.show(payload)
+        }
+    }
+
     func onCampaignInvalidated(_ campaignID: String) {
         if controller.activePayload?.id == campaignID {
             controller.dismiss()
         }
         inlineController.removeCampaign(campaignID)
+        guideOrchestrator.dismissIfActive(campaignKey: campaignID)
     }
 
     /// Sets the stored config directly, simulating a completed initialization, without any
@@ -125,12 +165,14 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         isNavigationMounted = false
         fontFactory = DefaultFontFactory()
         appConfigStore.clear()
+        campaignStore.clear()
         controller.dismiss()
         controller.dismissBottomSheet()
         controller.dismissDialog()
         controller.dismissToast()
         controller.clearSlots()
         inlineController.clear()
+        guideOrchestrator.dismiss()
         navigationController.reset()
         messageSubscribers.removeAll()
         appStateStore = nil
@@ -213,27 +255,20 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         lastBottomSheetDismissed = true
     }
 
-    private func initializeAppState(from appConfig: DigiaAppConfig, namespace: String) throws {
-        appState.removeAll()
-        appStateStreams.removeAll()
-        let definitions = appConfig.appState ?? []
-        let store = try AppStateStore(definitions: definitions, namespace: namespace)
-        appStateStore = store
-        appState = store.snapshot()
-        for definition in definitions {
-            let stream = AppStateValueStream(currentValue: appState[definition.name]?.anyValue)
-            appStateStreams[definition.streamName] = stream
-        }
-    }
 }
 
 @MainActor
 final class InlineCampaignController: ObservableObject {
     @Published private var campaigns: [String: InAppPayload] = [:]
+    @Published private var carouselConfigs: [String: InlineCarouselConfig] = [:]
     var onEvent: ((DigiaExperienceEvent, InAppPayload) -> Void)?
 
     func getCampaign(_ placementKey: String) -> InAppPayload? {
         campaigns[placementKey]
+    }
+
+    func getCarouselConfig(_ placementKey: String) -> InlineCarouselConfig? {
+        carouselConfigs[placementKey]
     }
 
     func setCampaign(_ placementKey: String, payload: InAppPayload) {
@@ -242,17 +277,31 @@ final class InlineCampaignController: ObservableObject {
         campaigns = next
     }
 
+    func setCarouselConfig(_ placementKey: String, config: InlineCarouselConfig) {
+        var next = carouselConfigs
+        next[placementKey] = config
+        carouselConfigs = next
+    }
+
     func removeCampaign(_ campaignID: String) {
+        let removedKeys = campaigns
+            .filter { $0.key == campaignID || $0.value.id == campaignID }
+            .map(\.key)
         campaigns = campaigns.filter { placementKey, payload in
             placementKey != campaignID && payload.id != campaignID
+        }
+        for key in removedKeys {
+            carouselConfigs.removeValue(forKey: key)
         }
     }
 
     func dismissCampaign(_ placementKey: String) {
         campaigns.removeValue(forKey: placementKey)
+        carouselConfigs.removeValue(forKey: placementKey)
     }
 
     func clear() {
         campaigns.removeAll()
+        carouselConfigs.removeAll()
     }
 }

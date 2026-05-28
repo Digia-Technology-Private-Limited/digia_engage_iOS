@@ -37,28 +37,10 @@ public struct DigiaDeveloperConfig: Sendable, Equatable {
     }
 }
 
-public enum DigiaInitStrategy: Sendable, Equatable {
-    case networkFirst(timeout: Duration)
-    case cacheFirst
-    case localFirst
-}
-
-public enum DigiaFlavor: Sendable, Equatable {
-    case debug(branchName: String? = nil)
-    case staging
-    case versioned(Int)
-    case release(
-        initStrategy: DigiaInitStrategy,
-        appConfigPath: String,
-        functionsPath: String
-    )
-}
-
 public struct DigiaConfig: Sendable, Equatable {
     public let apiKey: String
     public let logLevel: DigiaLogLevel
     public let environment: DigiaEnvironment
-    public let flavor: DigiaFlavor
     public let networkConfiguration: DigiaNetworkConfiguration?
     public let developerConfig: DigiaDeveloperConfig?
 
@@ -66,14 +48,12 @@ public struct DigiaConfig: Sendable, Equatable {
         apiKey: String,
         logLevel: DigiaLogLevel = .error,
         environment: DigiaEnvironment = .production,
-        flavor: DigiaFlavor? = nil,
         networkConfiguration: DigiaNetworkConfiguration? = nil,
         developerConfig: DigiaDeveloperConfig? = nil
     ) {
         self.apiKey = apiKey
         self.logLevel = logLevel
         self.environment = environment
-        self.flavor = flavor ?? .debug()
         self.networkConfiguration = networkConfiguration
         self.developerConfig = developerConfig
     }
