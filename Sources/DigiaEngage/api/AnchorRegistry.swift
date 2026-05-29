@@ -44,6 +44,10 @@ public final class AnchorRegistry: ObservableObject {
     public func getCornerRadius(for key: String) -> CGFloat {
         return cornerRadii[key] ?? 0
     }
+
+    public func find(_ key: String) -> CGRect? {
+        return getRect(for: key)
+    }
 }
 
 private final class WeakBox {
