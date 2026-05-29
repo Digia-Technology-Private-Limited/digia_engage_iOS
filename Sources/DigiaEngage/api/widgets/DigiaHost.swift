@@ -3,7 +3,6 @@ import SwiftUI
 public struct DigiaHost<Content: View>: View {
     private let content: Content
     @ObservedObject private var controller = SDKInstance.shared.controller
-    @ObservedObject private var guideOrchestrator = SDKInstance.shared.guideOrchestrator
 
     public init(@ViewBuilder content: () -> Content) {
         self.content = content()
@@ -32,25 +31,6 @@ public struct DigiaHost<Content: View>: View {
 
             DigiaToastOverlay(toast: controller.activeToast)
                 .zIndex(2)
-
-            // Guide overlay — rendered above everything else
-            if let guideState = guideOrchestrator.activeState {
-                let anchorKey = guideState.currentStep.anchorKey
-                if let anchorRect = AnchorRegistry.shared.find(anchorKey) {
-                    GuideOverlay(
-                        state: guideState,
-                        anchorRect: anchorRect,
-                        orchestrator: guideOrchestrator
-                    )
-                    .ignoresSafeArea()
-                    .zIndex(10)
-                } else {
-                    // Anchor not on screen — dismiss and fire health event
-                    Color.clear.onAppear {
-                        guideOrchestrator.dismiss()
-                    }
-                }
-            }
         }
         .onChange(of: controller.activePayload, initial: false) { _, payload in
             handlePayload(payload)
