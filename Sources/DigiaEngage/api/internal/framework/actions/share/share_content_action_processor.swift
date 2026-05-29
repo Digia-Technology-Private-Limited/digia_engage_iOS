@@ -12,11 +12,11 @@ struct ShareContentProcessor {
     let processorType: ActionType = .shareContent
 
     func execute(action: ShareContentAction, context: ActionProcessorContext) async throws {
-        guard let message = ExpressionUtil.evaluateNestedExpressionsToAny(action.data["message"], in: context.scopeContext) as? String,
+        guard let message = action.data["message"]?.deepEvaluate(in: context.scopeContext) as? String,
               !message.isEmpty else {
             throw ActionExecutionError.unsupportedContext(processorType)
         }
-        let subject = ExpressionUtil.evaluateNestedExpressionsToAny(action.data["subject"], in: context.scopeContext) as? String
+        let subject = action.data["subject"]?.deepEvaluate(in: context.scopeContext) as? String
         SDKInstance.shared.share(message: message, subject: subject)
         // UIActivityViewController requires an active scene + presenting controller; skip when the SDK
         // is invoked without a host UI (for example, during unit tests).

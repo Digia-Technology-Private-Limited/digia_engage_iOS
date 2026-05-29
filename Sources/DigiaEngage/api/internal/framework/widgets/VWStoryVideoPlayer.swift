@@ -125,7 +125,7 @@ private struct DigiaStoryVideoPlayerView: View {
         .onDisappear {
             model.pause()
         }
-        .onChange(of: scenePhase) { phase in
+        .onChange(of: scenePhase, initial: false) { _, phase in
             guard storyPlaybackBridge == nil else { return }
             switch phase {
             case .active:

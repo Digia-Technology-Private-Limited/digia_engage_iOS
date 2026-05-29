@@ -14,9 +14,9 @@ final class VWGridView: VirtualStatelessWidget<GridViewProps> {
             let rows = Array(repeating: GridItem(.flexible(), spacing: spacing), count: count)
             let content = AnyView(
                 LazyHGrid(rows: rows, spacing: crossSpacing) {
-                    ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                    ForEach(items.indices, id: \.self) { index in
                         child
-                            .toWidget(payload.copyWithChainedContext(self.createExprContext(item, index: index)))
+                            .toWidget(payload.copyWithChainedContext(self.createExprContext(items[index], index: index)))
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
@@ -24,13 +24,15 @@ final class VWGridView: VirtualStatelessWidget<GridViewProps> {
             return props.allowScroll ?? true ? AnyView(ScrollView(.horizontal, showsIndicators: false) { content }) : content
         }
 
+        // Flutter uses `AlignedGridView` (staggered_grid_view): cells are intrinsic height, not stretched
+        // to the row max. Avoid `maxHeight: .infinity` so row height = max child intrinsic height only.
         let columns = Array(repeating: GridItem(.flexible(), spacing: crossSpacing), count: count)
         let content = AnyView(
             LazyVGrid(columns: columns, spacing: spacing) {
-                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                ForEach(items.indices, id: \.self) { index in
                     child
-                        .toWidget(payload.copyWithChainedContext(self.createExprContext(item, index: index)))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .toWidget(payload.copyWithChainedContext(self.createExprContext(items[index], index: index)))
+                        .frame(maxWidth: .infinity, alignment: .top)
                 }
             }
         )

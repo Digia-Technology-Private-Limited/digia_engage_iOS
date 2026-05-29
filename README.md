@@ -8,11 +8,11 @@ Digia Engage is an iOS SDK for rendering server-driven, Digia-managed experience
 
 ## Requirements
 
-| | Minimum |
-|---|---|
-| iOS | 16.0 |
-| Swift | 5.10 |
-| Xcode | 16.0 |
+|       | Minimum |
+| ----- | ------- |
+| iOS   | 16.0    |
+| Swift | 5.10    |
+| Xcode | 16.0    |
 
 ## Installation
 
@@ -64,7 +64,7 @@ pod install
 import DigiaEngage
 
 try await Digia.initialize(
-    config: DigiaConfig(apiKey: "YOUR_API_KEY")
+    DigiaConfig(apiKey: "YOUR_API_KEY")
 )
 ```
 
@@ -76,9 +76,9 @@ import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        DigiaHost(
-          ...
-        )
+        DigiaHost {
+            DUIFactory.shared.createInitialPage()
+        }
     }
 }
 ```
@@ -86,29 +86,30 @@ struct ContentView: View {
 ### Render a slot
 
 ```swift
-DigiaSlot(slotId: "hero-banner")
+DigiaSlot("hero-banner")
 ```
 
 ## Plugins
 
-Digia Engage has a plugin architecture for CEP integrations. Register plugins after initialization:
+Digia Engage has a plugin architecture for CEP integrations.
 
 ```swift
 Digia.register(YourCEPPlugin())
 ```
 
 Available plugins:
+
 - [DigiaEngageCleverTap](https://github.com/Digia-Technology-Private-Limited/digia_engage_clevertap_ios)
 
 ## Sample App
 
-A sample app is included in `SampleApp/`. To run it locally:
+A sample app is included in `SampleApp/`. It links the local Swift package (`DigiaEngageSample.xcodeproj` → package at `..`). To run it:
 
 ```bash
-cd SampleApp
-pod install
-open DigiaEngageSample.xcworkspace
+open SampleApp/DigiaEngageSample.xcodeproj
 ```
+
+Select the **DigiaEngageSample** scheme and run on an iOS 16+ simulator (Xcode resolves package dependencies automatically).
 
 ## License
 

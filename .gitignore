@@ -28,9 +28,5 @@ xcuserdata/
 *.dia
 *.d
 
-# CocoaPods sample app artifacts
-SampleApp/Pods/
-SampleApp/Podfile.lock
-SampleApp/*.xcworkspace/
-
 .derivedData/
+docs/

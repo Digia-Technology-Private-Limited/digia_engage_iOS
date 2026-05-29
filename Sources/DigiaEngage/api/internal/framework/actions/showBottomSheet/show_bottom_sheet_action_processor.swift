@@ -19,33 +19,41 @@ struct ShowBottomSheetProcessor {
             ?? action.data["pageId"]?.stringValue
         guard let viewID else { throw ActionExecutionError.unsupportedContext(processorType) }
 
-        let waitForResult = (ExpressionUtil.evaluateNestedExpressionsToAny(
-            action.data["waitForResult"], in: context.scopeContext
-        ) as? Bool) ?? false
+        let waitForResult = (action.data["waitForResult"]?.deepEvaluate(in: context.scopeContext) as? Bool) ?? false
 
         let onResultFlow = action.data["onResult"]?.asActionFlow()
         let args = action.data["args"]?.objectValue ?? [:]
-
-        // Style properties — mirrors Flutter's action.style
         let style = action.data["style"]?.objectValue ?? [:]
 
-        let barrierColorStr = ExpressionUtil.evaluateNestedExpressionsToAny(
-            style["barrierColor"], in: context.scopeContext
-        ) as? String
-        let barrierColor: Color = barrierColorStr.flatMap { ColorUtil.fromString($0) }
-            ?? Color.black.opacity(0.54)  // Flutter default: Colors.black54
+        let resources = ResourceProvider(
+            fontFactory: SDKInstance.shared.fontFactory,
+            appConfigStore: context.appConfig
+        )
 
-        let maxHeightRatio = (ExpressionUtil.evaluateNestedExpressionsToAny(
-            style["maxHeight"], in: context.scopeContext
-        ) as? Double) ?? 1.0
+        let barrierColorStr = style["barrierColor"]?.deepEvaluate(in: context.scopeContext) as? String
+        let barrierColor: Color = barrierColorStr.flatMap { resources.getColor($0) }
+            ?? Color.black.opacity(0.54)
 
-        let borderColorStr = ExpressionUtil.evaluateNestedExpressionsToAny(
-            style["borderColor"], in: context.scopeContext
-        ) as? String
-        let borderColor: Color? = borderColorStr.flatMap { ColorUtil.fromString($0) }
-        let borderWidth = (ExpressionUtil.evaluateNestedExpressionsToAny(
-            style["borderWidth"], in: context.scopeContext
-        ) as? Double).map { CGFloat($0) }
+        let bgColorStr = style["bgColor"]?.deepEvaluate(in: context.scopeContext) as? String
+        let sheetBackgroundColor = bgColorStr.flatMap { resources.getColor($0) }
+
+        let maxHeightRatio = To.toDouble(style["maxHeight"]?.deepEvaluate(in: context.scopeContext)) ?? (9.0 / 16.0)
+        let useSafeArea = (style["useSafeArea"]?.deepEvaluate(in: context.scopeContext) as? Bool) ?? true
+        let showDragHandle = (style["showDragHandle"]?.deepEvaluate(in: context.scopeContext) as? Bool) ?? false
+        let borderStyleStr = style["borderStyle"]?.deepEvaluate(in: context.scopeContext) as? String
+        let borderColorStr = style["borderColor"]?.deepEvaluate(in: context.scopeContext) as? String
+        let borderColor: Color? = borderColorStr.flatMap { resources.getColor($0) }
+        let rawBorderWidth = style["borderWidth"]?.deepEvaluate(in: context.scopeContext)
+        let borderWidth = To.toDouble(rawBorderWidth).map { CGFloat($0) }
+        let cornerRadius = WidgetUtil.resolveCornerRadius(style["borderRadius"], scopeContext: context.scopeContext)
+            .map { radius in
+                CornerRadiusProps(
+                    topLeft: radius.topLeft,
+                    topRight: radius.topRight,
+                    bottomRight: 0,
+                    bottomLeft: 0
+                )
+            }
 
         let presentation = DigiaBottomSheetPresentation(
             view: DigiaViewPresentation(
@@ -56,63 +64,36 @@ struct ShowBottomSheetProcessor {
             ),
             barrierColor: barrierColor,
             maxHeight: maxHeightRatio,
+            sheetBackgroundColor: sheetBackgroundColor,
+            cornerRadius: cornerRadius,
             borderColor: borderColor,
-            borderWidth: borderWidth
+            borderWidth: borderWidth,
+            borderStyle: borderStyleStr,
+            useSafeArea: useSafeArea,
+            showDragHandle: showDragHandle
         )
-        SDKInstance.shared.controller.showBottomSheet(presentation)
-
         let overlayController = SDKInstance.shared.controller
+        let transition = BottomSheetTransitionModel()
+        overlayController.bottomSheetTransition = transition
 
-        // Layout mirrors Flutter's presentBottomSheet:
-        //   Column(mainAxisSize: MainAxisSize.min) → VStack + Spacer with lower priority
-        //   so the sheet wraps its content instead of expanding to fill the screen.
-        let maxAllowedHeight = UIScreen.main.bounds.height * presentation.maxHeight
-        let root = ZStack(alignment: .bottom) {
-            // Barrier overlay — tapping anywhere outside the sheet dismisses it
-            presentation.barrierColor
-                .ignoresSafeArea()
-                .onTapGesture {
-                    DispatchQueue.main.async {
-                        ViewControllerUtil.dismissPresented {
-                            overlayController.dismissBottomSheet()
-                        }
-                    }
-                }
+        let rendersInHost = SDKInstance.shared.isHostMounted
+        overlayController.showBottomSheet(presentation, rendersInHost: rendersInHost)
 
-            VStack(spacing: 0) {
-                Spacer()
-                    .layoutPriority(-1)
-
+        if !rendersInHost {
+            let root = NavigationUtil.presentBottomSheetContent(
+                presentation: presentation,
+                overlayController: overlayController,
+                transition: transition,
+                dismissesPresentedViewController: true
+            ) {
                 DigiaPresentationView(presentation: presentation.view)
-                    .frame(maxWidth: .infinity, maxHeight: maxAllowedHeight)
-                    .background(Color(uiColor: .systemBackground))
-                    .clipShape(UnevenRoundedRectangle(
-                        topLeadingRadius: 16,
-                        bottomLeadingRadius: 0,
-                        bottomTrailingRadius: 0,
-                        topTrailingRadius: 16,
-                        style: .continuous
-                    ))
-                    .overlay(alignment: .top) {
-                        if let borderColor = presentation.borderColor, let borderWidth = presentation.borderWidth, borderWidth > 0 {
-                            UnevenRoundedRectangle(
-                                topLeadingRadius: 16,
-                                bottomLeadingRadius: 0,
-                                bottomTrailingRadius: 0,
-                                topTrailingRadius: 16,
-                                style: .continuous
-                            )
-                            .stroke(borderColor, lineWidth: borderWidth)
-                        }
-                    }
             }
-            .ignoresSafeArea(edges: .bottom)
-        }
 
-        let host = UIHostingController(rootView: root)
-        host.view.backgroundColor = .clear
-        host.modalPresentationStyle = .overFullScreen
-        ViewControllerUtil.present(host)
+            let host = UIHostingController(rootView: root)
+            host.view.backgroundColor = .clear
+            host.modalPresentationStyle = .overFullScreen
+            ViewControllerUtil.present(host, animated: false)
+        }
 
         if waitForResult, onResultFlow != nil {
             let result = await withCheckedContinuation { (continuation: CheckedContinuation<JSONValue?, Never>) in

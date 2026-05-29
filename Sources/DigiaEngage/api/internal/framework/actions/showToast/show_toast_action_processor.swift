@@ -10,16 +10,15 @@ struct ShowToastAction: Sendable {
 struct ShowToastProcessor {
     let processorType: ActionType = .showToast
     func execute(action: ShowToastAction, context: ActionProcessorContext) async throws {
-        let resolvedMessage = ExpressionUtil.evaluateNestedExpressionsToAny(action.data["message"], in: context.scopeContext)
+        let resolvedMessage = action.data["message"]?.deepEvaluate(in: context.scopeContext)
         let message = resolvedMessage.map { value -> String in
             if let string = value as? String { return string }
             return String(describing: value)
         } ?? ""
         guard !message.isEmpty else { return }
 
-        let durationSeconds = (ExpressionUtil.evaluateNestedExpressionsToAny(action.data["duration"], in: context.scopeContext) as? Double)
-            ?? (ExpressionUtil.evaluateNestedExpressionsToAny(action.data["duration"], in: context.scopeContext) as? Int).map(Double.init)
-            ?? 2
+        let rawDuration = action.data["duration"]?.deepEvaluate(in: context.scopeContext)
+        let durationSeconds = (rawDuration as? Double) ?? (rawDuration as? Int).map(Double.init) ?? 2
 
         SDKInstance.shared.controller.showToast(
             DigiaToastPresentation(

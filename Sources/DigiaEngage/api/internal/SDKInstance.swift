@@ -46,7 +46,8 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         self.config = config
 
         if let family = config.fontFamily?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !family.isEmpty {
+            !family.isEmpty
+        {
             fontFactory = ConfiguredFontFactory(fontFamily: family)
         }
 
@@ -62,6 +63,10 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         }
 
         sdkState = .ready
+
+        if let plugin = activePlugin, !plugin.healthCheck().isHealthy {
+            plugin.setup(delegate: self)
+        }
     }
 
     private func logVerbose(_ message: String) {
@@ -113,10 +118,21 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
 
         // Typed path (RN/JS-driven): content already carries display info.
         let displayType = payload.content.type.lowercased()
-        let placementKey = payload.content.placementKey
+        let placementKey = payload.content.placementKey?.trimmingCharacters(
+            in: .whitespacesAndNewlines)
+        let viewId = payload.content.viewId?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let command = payload.content.command?.uppercased() ?? ""
 
-        if displayType == "inline", let placementKey {
-            inlineController.setCampaign(placementKey, payload: payload)
+        let routeInline: Bool = {
+            if displayType == "inline", let pk = placementKey, !pk.isEmpty { return true }
+            if let pk = placementKey, !pk.isEmpty, let vid = viewId, !vid.isEmpty {
+                if command.isEmpty || command == "SHOW_INLINE" { return true }
+            }
+            return false
+        }()
+
+        if routeInline, let pk = placementKey, !pk.isEmpty {
+            inlineController.setCampaign(pk, payload: payload)
         } else {
             controller.show(payload)
         }
@@ -129,16 +145,18 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         }
 
         switch campaign.config {
-        case let .inline(cfg):
+        case .inline(let cfg):
             let routed = InAppPayload(
                 id: payload.id,
-                content: InAppPayloadContent(type: "inline", placementKey: cfg.slotKey, campaignKey: key),
+                content: InAppPayloadContent(
+                    type: "inline", placementKey: cfg.slotKey, campaignKey: key),
                 cepContext: payload.cepContext
             )
             inlineController.setCarouselConfig(cfg.slotKey, config: cfg)
             inlineController.setCampaign(cfg.slotKey, payload: routed)
         case .story:
-            logVerbose("campaign_key path: story campaigns not supported natively yet (key '\(key)')")
+            logVerbose(
+                "campaign_key path: story campaigns not supported natively yet (key '\(key)')")
         case .guide:
             guideOrchestrator.start(campaign)
         case .nudge:
@@ -154,9 +172,6 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         guideOrchestrator.dismissIfActive(campaignKey: campaignID)
     }
 
-    /// Sets the stored config directly, simulating a completed initialization, without any
-    /// network calls or async work. Intended for tests that need to pre-seed state synchronously
-    /// before verifying guard-level idempotency (avoids suspension-point race conditions).
     func markInitializedForTesting(with config: DigiaConfig) {
         self.config = config
     }
@@ -192,7 +207,9 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
     }
 
     @discardableResult
-    func addMessageListener(name: String, listener: @escaping @Sendable (JSONValue?) -> Void) -> UUID {
+    func addMessageListener(name: String, listener: @escaping @Sendable (JSONValue?) -> Void)
+        -> UUID
+    {
         let token = UUID()
         var listeners = messageSubscribers[name, default: [:]]
         listeners[token] = listener
@@ -260,53 +277,4 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         lastBottomSheetDismissed = true
     }
 
-}
-
-@MainActor
-final class InlineCampaignController: ObservableObject {
-    @Published private var campaigns: [String: InAppPayload] = [:]
-    @Published private var carouselConfigs: [String: InlineCarouselConfig] = [:]
-    var onEvent: ((DigiaExperienceEvent, InAppPayload) -> Void)?
-
-    func getCampaign(_ placementKey: String) -> InAppPayload? {
-        campaigns[placementKey]
-    }
-
-    func getCarouselConfig(_ placementKey: String) -> InlineCarouselConfig? {
-        carouselConfigs[placementKey]
-    }
-
-    func setCampaign(_ placementKey: String, payload: InAppPayload) {
-        var next = campaigns
-        next[placementKey] = payload
-        campaigns = next
-    }
-
-    func setCarouselConfig(_ placementKey: String, config: InlineCarouselConfig) {
-        var next = carouselConfigs
-        next[placementKey] = config
-        carouselConfigs = next
-    }
-
-    func removeCampaign(_ campaignID: String) {
-        let removedKeys = campaigns
-            .filter { $0.key == campaignID || $0.value.id == campaignID }
-            .map(\.key)
-        campaigns = campaigns.filter { placementKey, payload in
-            placementKey != campaignID && payload.id != campaignID
-        }
-        for key in removedKeys {
-            carouselConfigs.removeValue(forKey: key)
-        }
-    }
-
-    func dismissCampaign(_ placementKey: String) {
-        campaigns.removeValue(forKey: placementKey)
-        carouselConfigs.removeValue(forKey: placementKey)
-    }
-
-    func clear() {
-        campaigns.removeAll()
-        carouselConfigs.removeAll()
-    }
 }
