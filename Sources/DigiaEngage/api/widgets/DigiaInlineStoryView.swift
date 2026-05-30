@@ -103,12 +103,11 @@ final class DigiaStoryWindowPresenter {
 }
 
 private final class DigiaStoryHostingController<Content: View>: UIHostingController<Content> {
-    private lazy var edgeBackGesture: UIScreenEdgePanGestureRecognizer = {
-        let recognizer = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(handleEdgeBackGesture(_:)))
-        recognizer.edges = .left
-        return recognizer
-    }()
-
+    // The interactive "back" (left-edge swipe) and swipe-down dismissals are
+    // handled inside the SwiftUI DragGesture in InlineStoryOverlayContent, not
+    // by a UIKit gesture recognizer here — a separate UIScreenEdgePanGesture on
+    // this view would be starved by SwiftUI's own pan recognizer. This
+    // controller only adds hardware-keyboard ESC dismissal (e.g. simulator).
     override var canBecomeFirstResponder: Bool {
         true
     }
@@ -123,23 +122,9 @@ private final class DigiaStoryHostingController<Content: View>: UIHostingControl
         ]
     }
 
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        view.addGestureRecognizer(edgeBackGesture)
-    }
-
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         becomeFirstResponder()
-    }
-
-    @objc private func handleEdgeBackGesture(_ recognizer: UIScreenEdgePanGestureRecognizer) {
-        guard recognizer.state == .ended else { return }
-        let translation = recognizer.translation(in: view)
-        let velocity = recognizer.velocity(in: view)
-        if translation.x > 60 || velocity.x > 400 {
-            dismissStoryOverlay()
-        }
     }
 
     @objc private func dismissStoryOverlay() {
@@ -180,7 +165,11 @@ private struct InlineStoryOverlayContent: View {
                             progress: progress,
                             config: state.config.indicator
                         )
-                        .padding(.top, CGFloat(state.config.indicator.topPadding) + proxy.safeAreaInsets.top)
+                        // `proxy.safeAreaInsets` is zero here because the
+                        // GeometryReader ignores the safe area for full-bleed
+                        // media, so we source the real device insets from the
+                        // window instead (see `safeAreaInsets`).
+                        .padding(.top, CGFloat(state.config.indicator.topPadding) + safeAreaInsets.top)
                         .padding(.horizontal, CGFloat(state.config.indicator.horizontalPadding))
 
                         Spacer(minLength: 0)
@@ -190,34 +179,29 @@ private struct InlineStoryOverlayContent: View {
                                 handleCTA(item.ctaAction)
                             }
                             .padding(.horizontal, 24)
-                            .padding(.bottom, proxy.safeAreaInsets.bottom + 20)
+                            .padding(.bottom, safeAreaInsets.bottom + 20)
                         }
                     }
                 }
             }
-            // Explicit close affordance — parity with Android's back-press
-            // dismissal. A discrete tap is delivered reliably even inside a
-            // React Native (Fabric) surface, whereas the swipe-down
-            // `DragGesture` below can be starved by RCTSurfaceTouchHandler.
-            .overlay(alignment: .topTrailing) {
-                Button {
-                    SDKInstance.shared.controller.dismissStoryOverlay()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(width: 32, height: 32)
-                        .background(Color.black.opacity(0.35))
-                        .clipShape(Circle())
-                }
-                .padding(.top, proxy.safeAreaInsets.top + 8)
-                .padding(.trailing, 16)
-            }
             .contentShape(Rectangle())
+            // Dismissal gestures live in a single SwiftUI DragGesture so they
+            // don't fight a separate UIKit recognizer (which SwiftUI's own pan
+            // would starve). Two "back" affordances:
+            //   • swipe DOWN  — standard full-screen-cover dismissal
+            //   • swipe RIGHT from the left edge — iOS interactive "back"
             .gesture(
                 DragGesture(minimumDistance: 10)
                     .onEnded { value in
-                        if value.translation.height > 48 {
+                        let dy = value.translation.height
+                        let dx = value.translation.width
+                        let predictedDX = value.predictedEndTranslation.width
+                        let swipeDown = dy > 48 && dy > abs(dx)
+                        let edgeBack =
+                            value.startLocation.x < 40
+                            && dx > abs(dy)
+                            && (dx > 80 || predictedDX > 200)
+                        if swipeDown || edgeBack {
                             SDKInstance.shared.controller.dismissStoryOverlay()
                         }
                     }
@@ -227,6 +211,18 @@ private struct InlineStoryOverlayContent: View {
         .onReceive(Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()) { _ in
             tick()
         }
+    }
+
+    /// Real device safe-area insets, read from the active window. The
+    /// enclosing GeometryReader uses `.ignoresSafeArea()` for full-bleed media,
+    /// which makes its own `safeAreaInsets` report zero — so the progress bar
+    /// (and CTA) would otherwise sit under the notch / home indicator.
+    private var safeAreaInsets: UIEdgeInsets {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .map(\.safeAreaInsets)
+            .first(where: { $0.top > 0 }) ?? .zero
     }
 
     private var currentItem: StoryItemConfig? {
