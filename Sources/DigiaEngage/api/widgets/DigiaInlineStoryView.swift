@@ -343,6 +343,10 @@ private struct InlineStoryVideoView: View {
         }
         .task(id: "\(urlString)-\(looping)-\(muted)") {
             guard let url = URL(string: urlString) else { return }
+            // DigiaVideoPlaybackBundle.make streams via a resource-loader that
+            // forces the content type, so videos served with a non-video
+            // Content-Type (e.g. raw.githubusercontent.com) still play —
+            // matching Android's ExoPlayer. See DigiaVideoStreaming.
             let nextBundle = DigiaVideoPlaybackBundle.make(url: url, looping: looping)
             nextBundle.player.isMuted = muted
             bundle = nextBundle
