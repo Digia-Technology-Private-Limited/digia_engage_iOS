@@ -14,15 +14,28 @@ enum ViewControllerUtil {
         return scenes.flatMap { $0.windows }.first(where: { $0.isKeyWindow })?.rootViewController
     }
 
-    static func topViewController(base: UIViewController? = rootViewController) -> UIViewController? {
+    static func topViewController(base: UIViewController? = nil) -> UIViewController? {
+        resolveTopViewController(base: base ?? rootViewController)
+    }
+
+    /// The active foreground window scene, used to host dedicated overlay
+    /// windows (e.g. the full-screen inline story).
+    static func findWindowScene() -> UIWindowScene? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        return scenes.first(where: { $0.activationState == .foregroundActive })
+            ?? scenes.first(where: { $0.keyWindow != nil })
+            ?? scenes.first
+    }
+
+    private static func resolveTopViewController(base: UIViewController?) -> UIViewController? {
         if let navigation = base as? UINavigationController {
-            return topViewController(base: navigation.visibleViewController)
+            return resolveTopViewController(base: navigation.visibleViewController)
         }
         if let tab = base as? UITabBarController, let selected = tab.selectedViewController {
-            return topViewController(base: selected)
+            return resolveTopViewController(base: selected)
         }
         if let presented = base?.presentedViewController {
-            return topViewController(base: presented)
+            return resolveTopViewController(base: presented)
         }
         return base
     }

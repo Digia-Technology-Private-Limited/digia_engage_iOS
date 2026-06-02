@@ -42,6 +42,7 @@ public enum Digia {
         let ctrl = SDKInstance.shared.controller
         return ctrl.activeToast != nil
             || ctrl.activeAnchoredOverlay != nil
+            || ctrl.activeStoryOverlay != nil
             || ctrl.activeBottomSheet != nil
             || ctrl.activeDialog != nil
     }

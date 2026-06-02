@@ -102,42 +102,6 @@ final class VWStory: VirtualStatelessWidget<StoryProps> {
 }
 
 @MainActor
-final class DigiaStoryController: ObservableObject {
-    enum StoryAction: String {
-        case play
-        case pause
-        case next
-        case previous
-        case mute
-        case unMute
-        case playCustomWidget
-    }
-
-    @Published fileprivate var storyStatus: StoryAction = .play
-    @Published fileprivate var jumpIndex: Int?
-
-    func play() { storyStatus = .play }
-    func pause() { storyStatus = .pause }
-    func next() { storyStatus = .next }
-    func previous() { storyStatus = .previous }
-    func mute() { storyStatus = .mute }
-    func unMute() { storyStatus = .unMute }
-    func playCustomWidget() { storyStatus = .playCustomWidget }
-    func jumpTo(_ index: Int) { jumpIndex = index }
-
-    func getField(_ name: String) -> Any? {
-        switch name {
-        case "isPaused":
-            return storyStatus == .pause
-        case "isMuted":
-            return storyStatus == .mute
-        default:
-            return nil
-        }
-    }
-}
-
-@MainActor
 struct ResolvedStoryIndicator {
     let activeColor: Color
     let completedColor: Color
@@ -219,9 +183,7 @@ final class StoryPlaybackCoordinator: ObservableObject {
 
     func confirmNoVideoDetected(for generation: UUID) {
         guard generation == self.generation, mode == .detectingVideo else { return }
-        // Called from a SwiftUI `.task` in the view tree; defer to avoid mutating
-        // observable state during a view update pass.
-        DispatchQueue.main.async { [weak self] in
+        Task { @MainActor [weak self] in
             guard let self else { return }
             self.startCountdown()
         }
@@ -533,9 +495,7 @@ private struct DigiaStoryView: View {
         }
         // Avoid forcing a full subtree rebuild on repeat; it resets image sizing state.
         .onReceive(Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()) { _ in
-            // Avoid "Modifying state during view update" warnings by ensuring the
-            // state mutation doesn't happen in the current update cycle.
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 coordinator.tick(delta: 0.05)
             }
         }
@@ -556,7 +516,7 @@ private struct DigiaStoryView: View {
         .onReceive(jumpIndexPublisher) { index in
             coordinator.jump(to: index)
         }
-        .onChange(of: scenePhase) { phase in
+        .onChange(of: scenePhase, initial: false) { _, phase in
             switch phase {
             case .active:
                 coordinator.resume()

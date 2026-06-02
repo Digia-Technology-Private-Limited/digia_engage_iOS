@@ -28,7 +28,7 @@ struct DigiaDeterminateLinearBar: View {
         .onAppear {
             updateProgress()
         }
-        .onChange(of: progress) { _ in
+        .onChange(of: progress, initial: false) { _, _ in
             updateProgress()
         }
     }
@@ -71,7 +71,7 @@ struct DigiaIndeterminateLinearBar: View {
         }
         .onAppear {
             withAnimation(.linear(duration: 1.1).repeatForever(autoreverses: false)) {
-                phase = reversed ? 1.2 : 1.2
+                phase = 1.2
             }
         }
     }
@@ -123,7 +123,7 @@ struct DigiaDeterminateCircularBar: View {
         .onAppear {
             updateProgress()
         }
-        .onChange(of: progress) { _ in
+        .onChange(of: progress, initial: false) { _, _ in
             updateProgress()
         }
     }

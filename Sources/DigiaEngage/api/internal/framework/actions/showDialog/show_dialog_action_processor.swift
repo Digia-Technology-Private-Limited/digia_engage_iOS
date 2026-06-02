@@ -17,30 +17,23 @@ struct ShowDialogProcessor {
         let viewID = viewData.string("id") ?? action.data.string("componentId") ?? action.data.string("pageId")
         guard let viewID else { throw ActionExecutionError.unsupportedContext(processorType) }
 
-        let barrierDismissible = (ExpressionUtil.evaluateNestedExpressionsToAny(
-            action.data["barrierDismissible"], in: context.scopeContext
-        ) as? Bool) ?? true
+        let barrierDismissible = (action.data["barrierDismissible"]?.deepEvaluate(in: context.scopeContext) as? Bool) ?? true
 
-        let waitForResult = (ExpressionUtil.evaluateNestedExpressionsToAny(
-            action.data["waitForResult"], in: context.scopeContext
-        ) as? Bool) ?? false
+        let waitForResult = (action.data["waitForResult"]?.deepEvaluate(in: context.scopeContext) as? Bool) ?? false
 
         let onResultFlow = action.data["onResult"]?.asActionFlow()
-        let args: [String: JSONValue]
-        if case let .object(value)? = action.data["args"] {
-            args = value
-        } else {
-            args = [:]
-        }
+        let args = action.data["args"]?.objectValue ?? [:]
 
-        // Style properties — mirrors Flutter's action.style
         let style = action.data["style"]?.objectValue ?? [:]
-
-        let barrierColorStr = ExpressionUtil.evaluateNestedExpressionsToAny(
-            style["barrierColor"], in: context.scopeContext
-        ) as? String
-        let barrierColor: Color = barrierColorStr.flatMap { ColorUtil.fromString($0) }
-            ?? Color.black.opacity(0.54)  // Flutter default: Colors.black54
+        let resources = ResourceProvider(
+            fontFactory: SDKInstance.shared.fontFactory,
+            appConfigStore: context.appConfig
+        )
+        let barrierColorStr =
+            (action.data["barrierColor"]?.deepEvaluate(in: context.scopeContext) as? String)
+            ?? (style["barrierColor"]?.deepEvaluate(in: context.scopeContext) as? String)
+        let barrierColor: Color = barrierColorStr.flatMap { resources.getColor($0) }
+            ?? Color.black.opacity(0.54)
 
         let presentation = DigiaDialogPresentation(
             view: DigiaViewPresentation(
@@ -52,45 +45,21 @@ struct ShowDialogProcessor {
             barrierDismissible: barrierDismissible,
             barrierColor: barrierColor
         )
-        SDKInstance.shared.controller.showDialog(presentation)
-
         let overlayController = SDKInstance.shared.controller
+        overlayController.showDialog(presentation)
 
-        // Layout mirrors Flutter's Dialog(child: ...):
-        //   Dialog wraps content at intrinsic size, centered on screen.
-        //   fixedSize(vertical: true) prevents the ZStack from offering full screen
-        //   height to the content, matching Flutter's intrinsic-height behavior.
-        let maxDialogWidth = min(UIScreen.main.bounds.width - 48, 560.0)
-
-        let root = ZStack {
-            if presentation.barrierDismissible {
-                presentation.barrierColor
-                    .ignoresSafeArea()
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        DispatchQueue.main.async {
-                            ViewControllerUtil.dismissPresented {
-                                overlayController.dismissDialog()
-                            }
-                        }
-                    }
-            } else {
-                presentation.barrierColor
-                    .ignoresSafeArea()
-            }
-
+        let root = NavigationUtil.presentDialogContent(
+            presentation: presentation,
+            overlayController: overlayController,
+            dismissesPresentedViewController: true
+        ) {
             DigiaPresentationView(presentation: presentation.view)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(minWidth: 280, maxWidth: maxDialogWidth)
-                .background(Color(uiColor: .systemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-                .padding(24)
         }
 
         let host = UIHostingController(rootView: root)
         host.view.backgroundColor = .clear
         host.modalPresentationStyle = .overFullScreen
-        ViewControllerUtil.present(host)
+        ViewControllerUtil.present(host, animated: false)
 
         if waitForResult, onResultFlow != nil {
             let result = await withCheckedContinuation { (continuation: CheckedContinuation<JSONValue?, Never>) in

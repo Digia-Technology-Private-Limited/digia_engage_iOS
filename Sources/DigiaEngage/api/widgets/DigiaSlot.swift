@@ -45,17 +45,23 @@ public struct DigiaSlot<Placeholder: View>: View {
 
     @ViewBuilder
     private func slotContent(for payload: InAppPayload) -> some View {
-        let viewId = payload.content.viewId ?? payload.content.placementKey
-
-        if let viewId, !viewId.isEmpty {
-            DUIFactory.shared.createComponent(viewId, args: payload.content.args)
+        if let carouselConfig = inlineController.getCarouselConfig(placementKey) {
+            InlineCarouselRenderer.makeView(carouselConfig)
+        } else if let storyConfig = inlineController.getStoryConfig(placementKey) {
+            DigiaInlineStoryView(config: storyConfig, payload: payload)
         } else {
-            // No viewId — collapse and dismiss.
-            Color.clear.frame(height: 0)
-                .onAppear {
-                    inlineController.onEvent?(.dismissed, payload)
-                    inlineController.dismissCampaign(placementKey)
-                }
+            let viewId = payload.content.viewId ?? payload.content.placementKey
+
+            if let viewId, !viewId.isEmpty {
+                DUIFactory.shared.createComponent(viewId, args: payload.content.args)
+            } else {
+                // No viewId — collapse and dismiss.
+                Color.clear.frame(height: 0)
+                    .onAppear {
+                        inlineController.onEvent?(.dismissed, payload)
+                        inlineController.dismissCampaign(placementKey)
+                    }
+            }
         }
     }
 
@@ -70,6 +76,8 @@ public struct DigiaSlot<Placeholder: View>: View {
 @MainActor
 public extension DigiaSlot where Placeholder == EmptyView {
     init(_ placementKey: String) {
-        self.init(placementKey) { EmptyView() }
+        self.init(placementKey) {
+            EmptyView()
+        }
     }
 }

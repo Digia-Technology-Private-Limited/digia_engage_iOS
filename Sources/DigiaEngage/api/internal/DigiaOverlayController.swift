@@ -1,63 +1,17 @@
-import Foundation
-import Combine
 import SwiftUI
 
 struct AnchoredOverlayState: Equatable, Sendable {
     let payload: InAppPayload
     let anchorKey: String
     let anchorRect: CGRect
-    let command: String          // "SHOW_TOOLTIP" or "SHOW_SPOTLIGHT"
-    let cornerRadius: CGFloat    // spotlight cutout corner radius
+    let command: String  // "SHOW_TOOLTIP" or "SHOW_SPOTLIGHT"
+    let cornerRadius: CGFloat  // spotlight cutout corner radius
 }
 
-struct DigiaViewPresentation: Equatable, Sendable {
-    let viewID: String
-    let title: String?
-    let text: String?
-    let args: [String: JSONValue]
-}
-
-struct DigiaToastPresentation: Equatable, Sendable {
-    let message: String
-    let durationSeconds: Double
-}
-
-struct DigiaBottomSheetPresentation: Equatable, Sendable {
-    let view: DigiaViewPresentation
-    let barrierColor: Color
-    let maxHeight: Double
-    let borderColor: Color?
-    let borderWidth: CGFloat?
-    
-    init(
-        view: DigiaViewPresentation,
-        barrierColor: Color = Color.black.opacity(0.54),
-        maxHeight: Double = 1.0,
-        borderColor: Color? = nil,
-        borderWidth: CGFloat? = nil
-    ) {
-        self.view = view
-        self.barrierColor = barrierColor
-        self.maxHeight = maxHeight
-        self.borderColor = borderColor
-        self.borderWidth = borderWidth
-    }
-}
-
-struct DigiaDialogPresentation: Equatable, Sendable {
-    let view: DigiaViewPresentation
-    let barrierDismissible: Bool
-    let barrierColor: Color
-    
-    init(
-        view: DigiaViewPresentation,
-        barrierDismissible: Bool = true,
-        barrierColor: Color = Color.black.opacity(0.54)
-    ) {
-        self.view = view
-        self.barrierDismissible = barrierDismissible
-        self.barrierColor = barrierColor
-    }
+struct InlineStoryOverlayState: Equatable {
+    let config: InlineStoryConfig
+    let initialIndex: Int
+    let payload: InAppPayload
 }
 
 @MainActor
@@ -68,14 +22,14 @@ final class DigiaOverlayController: ObservableObject {
     @Published private(set) var activeToast: DigiaToastPresentation?
     @Published private(set) var slotPayloads: [String: InAppPayload] = [:]
     @Published private(set) var activeAnchoredOverlay: AnchoredOverlayState?
+    @Published private(set) var activeStoryOverlay: InlineStoryOverlayState?
 
     private var toastToken = UUID()
     var onEvent: ((DigiaExperienceEvent, InAppPayload) -> Void)?
-
-    /// Callback invoked when the active dialog is dismissed, carrying an optional result value.
     var onDialogDismissed: ((JSONValue?) -> Void)?
-    /// Callback invoked when the active bottom sheet is dismissed, carrying an optional result value.
     var onBottomSheetDismissed: ((JSONValue?) -> Void)?
+    var bottomSheetTransition: BottomSheetTransitionModel?
+    private(set) var bottomSheetRendersInHost = false
 
     func show(_ payload: InAppPayload) {
         activePayload = payload
@@ -85,11 +39,15 @@ final class DigiaOverlayController: ObservableObject {
         activePayload = nil
     }
 
-    func showBottomSheet(_ presentation: DigiaBottomSheetPresentation) {
+    func showBottomSheet(_ presentation: DigiaBottomSheetPresentation, rendersInHost: Bool = false)
+    {
         activeBottomSheet = presentation
+        bottomSheetRendersInHost = rendersInHost
     }
 
     func dismissBottomSheet(result: JSONValue? = nil) {
+        bottomSheetTransition = nil
+        bottomSheetRendersInHost = false
         activeBottomSheet = nil
         onBottomSheetDismissed?(result)
         onBottomSheetDismissed = nil
@@ -110,7 +68,8 @@ final class DigiaOverlayController: ObservableObject {
         let token = UUID()
         toastToken = token
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(max(presentation.durationSeconds, 0) * 1_000_000_000))
+            try? await Task.sleep(
+                nanoseconds: UInt64(max(presentation.durationSeconds, 0) * 1_000_000_000))
             if self.toastToken == token {
                 self.dismissToast()
             }
@@ -143,5 +102,25 @@ final class DigiaOverlayController: ObservableObject {
 
     func dismissAnchored() {
         activeAnchoredOverlay = nil
+    }
+
+    func showStoryOverlay(config: InlineStoryConfig, initialIndex: Int, payload: InAppPayload) {
+        let state = InlineStoryOverlayState(
+            config: config,
+            initialIndex: initialIndex,
+            payload: payload
+        )
+        activeStoryOverlay = state
+        // The full-screen story is presented in its own dedicated UIWindow
+        // (DigiaStoryWindowPresenter), not as an in-host SwiftUI overlay. A
+        // separate key window sits above all React Native content and owns its
+        // touches outright, so taps / swipes / the CTA work without competing
+        // with Fabric's RCTSurfaceTouchHandler.
+        DigiaStoryWindowPresenter.shared.present(state: state)
+    }
+
+    func dismissStoryOverlay() {
+        activeStoryOverlay = nil
+        DigiaStoryWindowPresenter.shared.dismiss()
     }
 }

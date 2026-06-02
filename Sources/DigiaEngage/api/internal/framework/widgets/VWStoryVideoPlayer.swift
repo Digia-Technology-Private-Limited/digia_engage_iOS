@@ -26,7 +26,11 @@ struct StoryVideoPlaybackBundle {
     let looper: AVPlayerLooper?
 
     static func make(url: URL, looping: Bool) -> StoryVideoPlaybackBundle {
-        let item = AVPlayerItem(url: url)
+        make(asset: DigiaVideoStreaming.makeAsset(for: url), looping: looping)
+    }
+
+    static func make(asset: AVURLAsset, looping: Bool) -> StoryVideoPlaybackBundle {
+        let item = AVPlayerItem(asset: asset)
         if looping {
             let queuePlayer = AVQueuePlayer(playerItem: item)
             let looper = AVPlayerLooper(player: queuePlayer, templateItem: item)
@@ -54,10 +58,10 @@ final class StoryVideoPlayerModel: ObservableObject {
         }
 
         isLoading = true
-        let asset = AVURLAsset(url: url)
+        let asset = DigiaVideoStreaming.makeAsset(for: url)
         do {
             let duration = try await asset.load(.duration)
-            let bundle = StoryVideoPlaybackBundle.make(url: url, looping: looping)
+            let bundle = StoryVideoPlaybackBundle.make(asset: asset, looping: looping)
             playbackBundle = bundle
             player = bundle.player
             loadedDuration = duration.seconds.isFinite && duration.seconds > 0 ? duration.seconds : nil
@@ -125,7 +129,7 @@ private struct DigiaStoryVideoPlayerView: View {
         .onDisappear {
             model.pause()
         }
-        .onChange(of: scenePhase) { phase in
+        .onChange(of: scenePhase, initial: false) { _, phase in
             guard storyPlaybackBridge == nil else { return }
             switch phase {
             case .active:

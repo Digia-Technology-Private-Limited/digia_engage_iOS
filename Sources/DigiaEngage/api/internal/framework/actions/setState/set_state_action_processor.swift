@@ -19,7 +19,7 @@ struct SetStateProcessor {
             throw ActionExecutionError.unsupportedContext(processorType)
         }
 
-        let rebuild = (ExpressionUtil.evaluateNestedExpressionsToAny(action.data["rebuild"], in: context.scopeContext) as? Bool) ?? false
+        let rebuild = (action.data["rebuild"]?.deepEvaluate(in: context.scopeContext) as? Bool) ?? false
         var updates: [String: JSONValue] = [:]
         for item in updateArray {
             guard case let .object(update)? = Optional(item) else { continue }

@@ -1,9 +1,13 @@
 import UIKit
 
 @MainActor
-public final class AnchorRegistry {
+public final class AnchorRegistry: ObservableObject {
     public static let shared = AnchorRegistry()
     private init() {}
+
+    /// Bumped whenever anchors change so observing views (e.g. the guide overlay)
+    /// re-resolve anchor rects when an anchor registers after a guide has started.
+    @Published public private(set) var version = 0
 
     private var viewRegistry: [String: WeakBox] = [:]
     private var rectRegistry: [String: CGRect] = [:]
@@ -12,17 +16,20 @@ public final class AnchorRegistry {
     public func register(key: String, view: UIView, cornerRadius: CGFloat = 0) {
         viewRegistry[key] = WeakBox(view)
         cornerRadii[key] = cornerRadius
+        version &+= 1
     }
 
     public func register(key: String, rect: CGRect, cornerRadius: CGFloat = 0) {
         rectRegistry[key] = rect
         cornerRadii[key] = cornerRadius
+        version &+= 1
     }
 
     public func unregister(key: String) {
         viewRegistry.removeValue(forKey: key)
         rectRegistry.removeValue(forKey: key)
         cornerRadii.removeValue(forKey: key)
+        version &+= 1
     }
 
     public func getView(for key: String) -> UIView? {
@@ -36,6 +43,10 @@ public final class AnchorRegistry {
 
     public func getCornerRadius(for key: String) -> CGFloat {
         return cornerRadii[key] ?? 0
+    }
+
+    public func find(_ key: String) -> CGRect? {
+        return getRect(for: key)
     }
 }
 

@@ -41,23 +41,26 @@ public struct DigiaConfig: Sendable, Equatable {
     public let apiKey: String
     public let logLevel: DigiaLogLevel
     public let environment: DigiaEnvironment
-    public let baseUrl: String?
     public let networkConfiguration: DigiaNetworkConfiguration?
     public let developerConfig: DigiaDeveloperConfig?
+    /// Optional global font family applied to all Digia-rendered text.
+    /// Resolved via `Font.custom` / `UIFont(name:)`, so it must match a font
+    /// registered with the app (e.g. a bundled custom font's PostScript name).
+    public let fontFamily: String?
 
     public init(
         apiKey: String,
         logLevel: DigiaLogLevel = .error,
         environment: DigiaEnvironment = .production,
-        baseUrl: String? = nil,
         networkConfiguration: DigiaNetworkConfiguration? = nil,
-        developerConfig: DigiaDeveloperConfig? = nil
+        developerConfig: DigiaDeveloperConfig? = nil,
+        fontFamily: String? = nil
     ) {
         self.apiKey = apiKey
         self.logLevel = logLevel
         self.environment = environment
-        self.baseUrl = baseUrl
         self.networkConfiguration = networkConfiguration
         self.developerConfig = developerConfig
+        self.fontFamily = fontFamily
     }
 }

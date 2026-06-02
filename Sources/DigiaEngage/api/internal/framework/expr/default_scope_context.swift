@@ -18,7 +18,7 @@ final class DefaultScopeContext: ScopeContext {
             switch variables[key] {
             case .none:
                 return ExprLookupResult(found: true, value: ExprValue.from(nil))
-            case let .some(value):
+            case .some(let value):
                 return ExprLookupResult(found: true, value: ExprValue.from(value))
             }
         }

@@ -158,7 +158,7 @@ private struct LottieRepresentable: UIViewRepresentable {
             return
         }
         LottieAnimation.loadedFrom(url: url) { animation in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 host.animationView.animation = animation
                 completion()
             }

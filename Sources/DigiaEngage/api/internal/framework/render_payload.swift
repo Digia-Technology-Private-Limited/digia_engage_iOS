@@ -29,23 +29,23 @@ struct RenderPayload {
 
     func evalColor(_ value: String?, scopeContext incoming: (any ExprContext)? = nil) -> Color? {
         guard let value else { return nil }
-        return resolveColor(ExprOr<String>.value(value).resolve(in: chainContext(incoming)))
+        return resolveColor(ExprOr<String>.value(value).evaluate(in: chainContext(incoming)))
     }
 
     func eval(_ value: ExprOr<String>?, scopeContext incoming: (any ExprContext)? = nil) -> String? {
-        value?.resolve(in: chainContext(incoming))
+        value?.evaluate(in: chainContext(incoming))
     }
 
     func eval(_ value: ExprOr<Bool>?, scopeContext incoming: (any ExprContext)? = nil) -> Bool? {
-        value?.resolve(in: chainContext(incoming))
+        value?.evaluate(in: chainContext(incoming))
     }
 
     func eval(_ value: ExprOr<Int>?, scopeContext incoming: (any ExprContext)? = nil) -> Int? {
-        value?.resolve(in: chainContext(incoming))
+        value?.evaluate(in: chainContext(incoming))
     }
 
     func eval(_ value: ExprOr<Double>?, scopeContext incoming: (any ExprContext)? = nil) -> Double? {
-        value?.resolve(in: chainContext(incoming))
+        value?.evaluate(in: chainContext(incoming))
     }
 
     func evalJSONValue(_ value: JSONValue?, scopeContext incoming: (any ExprContext)? = nil) -> JSONValue? {
@@ -54,7 +54,7 @@ struct RenderPayload {
     }
 
     func evalAny(_ value: JSONValue?, scopeContext incoming: (any ExprContext)? = nil) -> Any? {
-        ExpressionUtil.evaluateNestedExpressionsToAny(value, in: chainContext(incoming))
+        value?.deepEvaluate(in: chainContext(incoming))
     }
 
     func evalColor(_ value: ExprOr<String>?, scopeContext incoming: (any ExprContext)? = nil) -> Color? {

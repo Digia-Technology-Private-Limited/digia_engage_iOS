@@ -714,7 +714,7 @@ private struct DigiaPlatformTextInput: UIViewRepresentable {
 
         if configuration.autoFocus, !coordinator.didRequestFocus {
             coordinator.didRequestFocus = true
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 _ = view.becomeFirstResponder()
             }
             return
@@ -722,11 +722,11 @@ private struct DigiaPlatformTextInput: UIViewRepresentable {
 
         // Keep UIKit focus state consistent so tapping another field works reliably.
         if isFocused, !view.isFirstResponder {
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 _ = view.becomeFirstResponder()
             }
         } else if !isFocused, view.isFirstResponder {
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 _ = view.resignFirstResponder()
             }
         }

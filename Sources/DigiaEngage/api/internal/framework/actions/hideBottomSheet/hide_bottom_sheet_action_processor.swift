@@ -14,8 +14,25 @@ struct HideBottomSheetProcessor {
         let result = action.data["result"].map {
             ExpressionUtil.evaluateNestedExpressions($0, in: context.scopeContext)
         }
-        SDKInstance.shared.controller.dismissBottomSheet(result: result)
-        SDKInstance.shared.didDismissBottomSheet()
-        ViewControllerUtil.dismissPresented()
+        let controller = SDKInstance.shared.controller
+        if let transition = controller.bottomSheetTransition {
+            transition.animateDismiss {
+                if controller.bottomSheetRendersInHost {
+                    controller.dismissBottomSheet(result: result)
+                    SDKInstance.shared.didDismissBottomSheet()
+                } else {
+                    ViewControllerUtil.dismissPresented(animated: false) {
+                        controller.dismissBottomSheet(result: result)
+                        SDKInstance.shared.didDismissBottomSheet()
+                    }
+                }
+            }
+        } else {
+            controller.dismissBottomSheet(result: result)
+            SDKInstance.shared.didDismissBottomSheet()
+            if !controller.bottomSheetRendersInHost {
+                ViewControllerUtil.dismissPresented(animated: true)
+            }
+        }
     }
 }
