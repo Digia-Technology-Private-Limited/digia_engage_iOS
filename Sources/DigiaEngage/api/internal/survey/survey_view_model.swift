@@ -46,6 +46,13 @@ final class SurveyViewModel: ObservableObject {
         answers[nodeId] = answer
     }
 
+    func nextBlockIsResultPage() -> Bool {
+        if isComplete || currentNodeId == SURVEY_FINISHED { return false }
+        let navigation = SurveyLogicHandler.nextStep(survey: survey, currentNodeId: currentNodeId, answers: answers)
+        guard let nextNode = survey.nodeById(navigation.nextNodeId) else { return false }
+        return survey.blockFor(nextNode)?.type == .resultPage
+    }
+
     /// Records the current answer and moves to the branching-decided next node.
     func advance() {
         if isComplete { return }

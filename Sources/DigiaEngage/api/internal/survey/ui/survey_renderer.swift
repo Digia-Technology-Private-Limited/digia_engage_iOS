@@ -14,11 +14,8 @@ struct SurveyRenderer: View {
     var body: some View {
         Group {
             if let state = orchestrator.state {
-                let _ = print("[Digia] SurveyRenderer — mounting SurveySession token=\(state.token)")
                 SurveySession(state: state, orchestrator: orchestrator)
                     .id(state.token)
-            } else {
-                let _ = print("[Digia] SurveyRenderer — orchestrator.state is nil")
             }
         }
     }
@@ -59,6 +56,7 @@ private struct SurveySession: View {
                                     survey: survey,
                                     accent: accent,
                                     onClose: { finish(completed: false) },
+                                    onCompletedClose: { SDKInstance.shared.dismissCompletedSurvey() },
                                     showCloseButton: display.bottomSheet.backdropDismissible
                                 )
                             }
@@ -74,6 +72,7 @@ private struct SurveySession: View {
                                     survey: survey,
                                     accent: accent,
                                     onClose: { finish(completed: false) },
+                                    onCompletedClose: { SDKInstance.shared.dismissCompletedSurvey() },
                                     showCloseButton: display.dialog.showCloseButton
                                 )
                             }
@@ -84,12 +83,10 @@ private struct SurveySession: View {
             }
         }
         .task(id: state.token) {
-            print("[Digia] SurveySession — task fired, timeDelayMs=\(survey.timeDelayMs), display=\(display.type), isComplete=\(vm.isComplete)")
             let delayNs = UInt64(max(0, survey.timeDelayMs + RENDER_DELAY_MS)) * 1_000_000
             try? await Task.sleep(nanoseconds: delayNs)
             SDKInstance.shared.reportSurveyStarted()
             visible = true
-            print("[Digia] SurveySession — visible=true (after \(survey.timeDelayMs + RENDER_DELAY_MS)ms delay)")
         }
         .onChange(of: vm.isComplete) { complete in
             if complete { finish(completed: true) }
@@ -118,6 +115,12 @@ private struct BottomSheetContainer<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     @State private var dragOffset: CGFloat = 0
+    // Dismissal (backdrop tap / drag) is disabled until the sheet has been on
+    // screen long enough for the CTA Buttons' gesture recognisers to attach.
+    // Without this, the very first tap after the sheet appears can land before
+    // the Button is interactive and instead resolves to the always-live
+    // backdrop dismiss gesture — closing the survey on the user's first tap.
+    @State private var armed = false
 
     var body: some View {
         GeometryReader { geo in
@@ -126,7 +129,7 @@ private struct BottomSheetContainer<Content: View>: View {
                     .ignoresSafeArea()
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        if sheet.backdropDismissible { onDismiss() }
+                        if armed && sheet.backdropDismissible { onDismiss() }
                     }
 
                 VStack(spacing: 0) {
@@ -148,6 +151,12 @@ private struct BottomSheetContainer<Content: View>: View {
                     )
                     .fill(background)
                 )
+                .clipShape(
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: CGFloat(sheet.cornerRadius),
+                        topTrailingRadius: CGFloat(sheet.cornerRadius)
+                    )
+                )
                 .offset(y: dragOffset)
                 .gesture(
                     sheet.draggable
@@ -156,7 +165,7 @@ private struct BottomSheetContainer<Content: View>: View {
                                 dragOffset = max(0, value.translation.height)
                             }
                             .onEnded { value in
-                                if value.translation.height > 150 {
+                                if armed && value.translation.height > 150 {
                                     onDismiss()
                                 } else {
                                     withAnimation(.easeOut) { dragOffset = 0 }
@@ -165,6 +174,10 @@ private struct BottomSheetContainer<Content: View>: View {
                         : nil
                 )
                 .padding(.bottom, geo.safeAreaInsets.bottom)
+            }
+            .task {
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                armed = true
             }
         }
     }
@@ -237,6 +250,10 @@ private struct DialogContainer<Content: View>: View {
     let onDismiss: () -> Void
     @ViewBuilder let content: () -> Content
 
+    // See BottomSheetContainer.armed — blocks the first-frame backdrop tap from
+    // closing the survey before the CTA Buttons are interactive.
+    @State private var armed = false
+
     var body: some View {
         GeometryReader { geo in
             ZStack {
@@ -244,7 +261,7 @@ private struct DialogContainer<Content: View>: View {
                     .ignoresSafeArea()
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        if dialog.backdropDismissible { onDismiss() }
+                        if armed && dialog.backdropDismissible { onDismiss() }
                     }
 
                 content()
@@ -254,7 +271,12 @@ private struct DialogContainer<Content: View>: View {
                         RoundedRectangle(cornerRadius: CGFloat(dialog.cornerRadius))
                             .fill(background)
                     )
+                    .clipShape(RoundedRectangle(cornerRadius: CGFloat(dialog.cornerRadius)))
                     .padding(16)
+            }
+            .task {
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                armed = true
             }
         }
     }
@@ -307,21 +329,69 @@ private struct SurveyBody: View {
     let survey: SurveyConfigModel
     let accent: Color
     let onClose: () -> Void
+    let onCompletedClose: () -> Void
     let showCloseButton: Bool
 
     @State private var remainingSecs: Int = 0
     @State private var autoAdvanceTask: Task<Void, Never>?
     @State private var timerTask: Task<Void, Never>?
     @State private var lastAutoAdvanceKey: String = ""
+    @State private var welcomeDone = false
+    @State private var completionReported = false
 
     var body: some View {
         Group {
-            if let node = vm.currentNode, let block = survey.blockFor(node) {
+            if let welcome = survey.welcomeBlock(), !welcomeDone {
+                welcomeScreen(welcome)
+            } else if let node = vm.currentNode, let block = survey.blockFor(node) {
                 bodyContent(node: node, block: block)
             } else {
                 EmptyView()
             }
         }
+    }
+
+    /// Fixed intro chrome shown before the node flow (the welcome block is not a
+    /// graph node). Mirrors Android's `WelcomeScreen`.
+    @ViewBuilder
+    private func welcomeScreen(_ block: SurveyBlock) -> some View {
+        let cta = survey.settings.cta
+        VStack(alignment: .leading, spacing: 12) {
+            if showCloseButton && survey.settings.display.dismissible {
+                HStack {
+                    Spacer()
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(SurveyTokens.textTertiary)
+                            .frame(width: 26, height: 26)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            if block.showMedia && block.media.position == .top {
+                BlockMediaImage(media: block.media)
+            }
+            BlockTitleView(block: block, accent: accent)
+            if block.showMedia && block.media.position == .inline {
+                BlockMediaImage(media: block.media)
+            }
+            Button { welcomeDone = true } label: {
+                Text(cta.startLabel)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(ctaText(cta))
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: cta.layout == .stacked ? .infinity : nil)
+                    .background(RoundedRectangle(cornerRadius: CGFloat(cta.cornerRadius)).fill(ctaBg(cta, accent)))
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 2)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(hex: block.backgroundColor) ?? Color.clear)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     @ViewBuilder
@@ -336,6 +406,7 @@ private struct SurveyBody: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(hex: block.backgroundColor) ?? Color.clear)
         .fixedSize(horizontal: false, vertical: true)
         .onAppear {
             if timerCfg.enabled && timerCfg.timeLimitSeconds > 0 && remainingSecs == 0 {
@@ -369,7 +440,8 @@ private struct SurveyBody: View {
                     style: pagination.paginationStyle,
                     segments: total,
                     currentSegment: position,
-                    accent: accent
+                    accent: accent,
+                    indicator: pagination.progressIndicatorStyle
                 )
                 .frame(maxWidth: .infinity)
             } else {
@@ -441,6 +513,7 @@ private struct SurveyBody: View {
         if showNext {
             Spacer().frame(height: 18)
             FooterRow(
+                cta: survey.settings.cta,
                 accent: accent,
                 canGoBack: vm.canGoBack,
                 onBack: { vm.back() },
@@ -452,6 +525,7 @@ private struct SurveyBody: View {
                             SDKInstance.shared.reportSurveyAnswered(stepId: node.id, answer: ans.toMap())
                         }
                     }
+                    reportCompletionIfResultIsNext()
                     vm.advance()
                 }
             )
@@ -460,18 +534,19 @@ private struct SurveyBody: View {
 
     @ViewBuilder
     private func blockContent(node: SurveyNode, block: SurveyBlock) -> some View {
+        let cta = survey.settings.cta
         switch block.type {
         case .welcome:
             Button {
                 SDKInstance.shared.reportSurveyAnswered(stepId: node.id, answer: [:])
                 vm.advance()
             } label: {
-                Text("Start →")
+                Text(cta.startLabel)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(ctaText(cta))
                     .padding(.horizontal, 18)
                     .padding(.vertical, 10)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(accent))
+                    .background(RoundedRectangle(cornerRadius: CGFloat(cta.cornerRadius)).fill(ctaBg(cta, accent)))
             }
             .buttonStyle(.plain)
             .padding(.top, 4)
@@ -484,14 +559,15 @@ private struct SurveyBody: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(RoundedRectangle(cornerRadius: 10).fill(SurveyTokens.surfaceSunken))
                 Button {
-                    vm.advance()
+                    onCompletedClose()
                 } label: {
-                    Text("Done")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(SurveyTokens.textPrimary)
+                    Text(cta.doneLabel)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(ctaText(cta))
                         .padding(.horizontal, 18)
                         .padding(.vertical, 10)
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(SurveyTokens.border, lineWidth: 1))
+                        .frame(maxWidth: cta.layout == .stacked ? .infinity : nil)
+                        .background(RoundedRectangle(cornerRadius: CGFloat(cta.cornerRadius)).fill(ctaBg(cta, accent)))
                 }
                 .buttonStyle(.plain)
             }
@@ -520,7 +596,15 @@ private struct SurveyBody: View {
             if Task.isCancelled { return }
             guard vm.currentNode?.id == node.id else { return }
             SDKInstance.shared.reportSurveyAnswered(stepId: node.id, answer: ans.toMap())
+            reportCompletionIfResultIsNext()
             vm.advance()
+        }
+    }
+
+    private func reportCompletionIfResultIsNext() {
+        if !completionReported && vm.nextBlockIsResultPage() {
+            SDKInstance.shared.reportSurveyCompleted(response: vm.responsePayload(), answers: vm.answers)
+            completionReported = true
         }
     }
 
@@ -555,28 +639,34 @@ private struct ProgressBar: View {
     let segments: Int
     let currentSegment: Int
     let accent: Color
+    var indicator: ProgressIndicatorStyle = .default
+
+    private var activeColor: Color { Color(hex: indicator.activeColorHex) ?? accent }
+    private var trackColor: Color { Color(hex: indicator.trackColorHex) ?? SurveyTokens.surfaceSunken }
+    private var height: CGFloat { CGFloat(indicator.height) }
+    private var radius: CGFloat { CGFloat(indicator.cornerRadius) }
 
     var body: some View {
         if style == .segmented && segments > 1 {
             HStack(spacing: 3) {
                 ForEach(1...segments, id: \.self) { i in
                     let on = i <= currentSegment
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(on ? accent : SurveyTokens.surfaceSunken)
-                        .frame(height: 3)
+                    RoundedRectangle(cornerRadius: radius)
+                        .fill(on ? activeColor : trackColor)
+                        .frame(height: height)
                         .frame(maxWidth: .infinity)
                 }
             }
         } else {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 2).fill(SurveyTokens.surfaceSunken)
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(accent)
+                    RoundedRectangle(cornerRadius: radius).fill(trackColor)
+                    RoundedRectangle(cornerRadius: radius)
+                        .fill(activeColor)
                         .frame(width: geo.size.width * min(1, max(0, progress)))
                 }
             }
-            .frame(height: 3)
+            .frame(height: height)
         }
     }
 }
@@ -605,7 +695,7 @@ private struct CategoryPill: View {
     let accent: Color
 
     var body: some View {
-        if block.type.isContent {
+        if block.type.isContent || !block.showTag {
             EmptyView()
         } else if let label = categoryLabel(block.type) {
             Text(label.uppercased())
@@ -663,7 +753,17 @@ private struct MediaPlaceholder: View {
     }
 }
 
+/// Resolved CTA background — explicit hex, else the theme accent.
+private func ctaBg(_ cta: CtaSettings, _ accent: Color) -> Color {
+    Color(hex: cta.bgColorHex) ?? accent
+}
+/// Resolved CTA text colour — explicit hex, else white.
+private func ctaText(_ cta: CtaSettings) -> Color {
+    Color(hex: cta.textColorHex) ?? .white
+}
+
 private struct FooterRow: View {
+    let cta: CtaSettings
     let accent: Color
     let canGoBack: Bool
     let onBack: () -> Void
@@ -671,31 +771,76 @@ private struct FooterRow: View {
     let nextLabel: String
     let onNext: () -> Void
 
+    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: CGFloat(cta.cornerRadius)) }
+
+    @ViewBuilder
+    private func nextButton(fullWidth: Bool) -> some View {
+        Button(action: onNext) {
+            Text(nextLabel)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(ctaText(cta))
+                .padding(.horizontal, 18)
+                .padding(.vertical, 10)
+                .frame(maxWidth: fullWidth ? .infinity : nil)
+                .background(shape.fill(nextEnabled ? ctaBg(cta, accent) : ctaBg(cta, accent).opacity(0.35)))
+        }
+        .buttonStyle(.plain)
+        .disabled(!nextEnabled)
+    }
+
+    @ViewBuilder
+    private func backButton(fullWidth: Bool) -> some View {
+        Button(action: onBack) {
+            Text(cta.backLabel)
+                .font(.system(size: 14))
+                .foregroundColor(SurveyTokens.textSecondary)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 10)
+                .frame(maxWidth: fullWidth ? .infinity : nil)
+                .overlay(fullWidth ? AnyView(shape.stroke(SurveyTokens.border, lineWidth: 1)) : AnyView(EmptyView()))
+        }
+        .buttonStyle(.plain)
+    }
+
     var body: some View {
-        HStack(spacing: 0) {
-            if canGoBack {
-                Button(action: onBack) {
-                    Text("← Back")
-                        .font(.system(size: 14))
-                        .foregroundColor(SurveyTokens.textSecondary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                }
-                .buttonStyle(.plain)
+        if cta.layout == .stacked {
+            VStack(spacing: 10) {
+                nextButton(fullWidth: true)
+                if canGoBack { backButton(fullWidth: true) }
+            }
+            .frame(maxWidth: .infinity)
+        } else {
+            inlineRow
+        }
+    }
+
+    @ViewBuilder
+    private var inlineRow: some View {
+        HStack(spacing: 12) {
+            switch cta.arrangement {
+            case .spaceBetween:
+                if canGoBack { backButton(fullWidth: false) }
                 Spacer(minLength: 0)
-            } else {
+                nextButton(fullWidth: false)
+            case .end:
+                Spacer(minLength: 0)
+                if canGoBack { backButton(fullWidth: false) }
+                nextButton(fullWidth: false)
+            case .start:
+                if canGoBack { backButton(fullWidth: false) }
+                nextButton(fullWidth: false)
+                Spacer(minLength: 0)
+            case .center:
+                Spacer(minLength: 0)
+                if canGoBack { backButton(fullWidth: false) }
+                nextButton(fullWidth: false)
+                Spacer(minLength: 0)
+            case .spaceEvenly:
+                Spacer(minLength: 0)
+                if canGoBack { backButton(fullWidth: false); Spacer(minLength: 0) }
+                nextButton(fullWidth: false)
                 Spacer(minLength: 0)
             }
-            Button(action: onNext) {
-                Text(nextLabel)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 10)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(nextEnabled ? accent : accent.opacity(0.35)))
-            }
-            .buttonStyle(.plain)
-            .disabled(!nextEnabled)
         }
         .frame(maxWidth: .infinity)
     }
@@ -704,7 +849,8 @@ private struct FooterRow: View {
 // MARK: - Helpers
 
 private func footerNextLabel(survey: SurveyConfigModel, node: SurveyNode, block: SurveyBlock) -> String {
-    if block.type == .textMedia { return "Next" }
+    let cta = survey.settings.cta
+    if block.type == .textMedia { return cta.nextLabel }
     let target = node.branching.defaultTarget
     let noRules = node.branching.rules.isEmpty
     let terminates: Bool
@@ -720,7 +866,7 @@ private func footerNextLabel(survey: SurveyConfigModel, node: SurveyNode, block:
     } else {
         terminates = false
     }
-    return terminates ? "Finish" : "Next"
+    return terminates ? cta.doneLabel : cta.nextLabel
 }
 
 private func categoryLabel(_ type: SurveyBlockType) -> String? {
@@ -728,7 +874,7 @@ private func categoryLabel(_ type: SurveyBlockType) -> String? {
     case .singleSelect: return "Select one answer"
     case .multiSelect: return "Select all that apply"
     case .rating: return "Rate it"
-    case .nps: return "Promoter score"
+    case .nps, .npsEmoji, .npsSmiley: return "Promoter score"
     case .reaction: return "Reaction poll"
     case .thisOrThat: return "This or that"
     case .tierList: return "Tier list"

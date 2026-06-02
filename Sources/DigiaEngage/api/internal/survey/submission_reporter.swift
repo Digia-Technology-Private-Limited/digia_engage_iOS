@@ -48,7 +48,7 @@ struct SurveySubmissionReporter {
     private static func endpoint(config: DigiaConfig) -> URL? {
         let production = "https://api.digia.tech/api/v1"
         let sandbox = "https://zaiden-phonematic-unseemly.ngrok-free.dev/api/v1"
-        let raw = config.baseUrl
+        let raw = config.developerConfig?.baseURL
             ?? (config.environment == .sandbox ? sandbox : production)
         let trimmed = raw.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         let base = trimmed.hasSuffix("/api/v1") ? trimmed : trimmed + "/api/v1"

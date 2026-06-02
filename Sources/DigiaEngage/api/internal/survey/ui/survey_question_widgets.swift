@@ -34,22 +34,19 @@ struct TextDefaults {
 
 let TitleDefaults = TextDefaults(sizePt: 20, weight: .bold, color: SurveyTokens.textPrimary)
 let BodyDefaults = TextDefaults(sizePt: 14, weight: .regular, color: SurveyTokens.textSecondary)
-let OptionDefaults = TextDefaults(sizePt: 15, weight: .regular, color: SurveyTokens.textPrimary)
+let OptionDefaults = TextDefaults(sizePt: 16, weight: .medium, color: SurveyTokens.textPrimary)
 
 extension ElementStyle {
+    /// Authored pixel size, or the element default when unset (0).
     func resolveFontSize(default def: CGFloat) -> CGFloat {
-        switch size {
-        case .sm: return def - 2
-        case .md: return def
-        case .lg: return def + 2
-        case .xl: return def + 6
-        }
+        size > 0 ? CGFloat(size) : def
     }
 
     func resolveWeight() -> Font.Weight {
         switch weight {
         case .regular: return .regular
         case .medium: return .medium
+        case .semibold: return .semibold
         case .bold: return .bold
         }
     }
@@ -107,7 +104,11 @@ struct SurveyQuestionContent: View {
         case .rating:
             return AnyView(StarRatingQuestion(range: 5, accent: accent, answer: answer, onAnswer: onAnswer))
         case .nps:
-            return AnyView(NpsQuestion(accent: accent, answer: answer, onAnswer: onAnswer))
+            return AnyView(NpsQuestion(accent: accent, style: block.npsStyle, answer: answer, onAnswer: onAnswer))
+        case .npsEmoji:
+            return AnyView(NpsFaceQuestion(accent: accent, style: block.npsStyle, faceSize: 28, answer: answer, onAnswer: onAnswer))
+        case .npsSmiley:
+            return AnyView(NpsFaceQuestion(accent: accent, style: block.npsStyle, faceSize: 30, answer: answer, onAnswer: onAnswer))
         case .reaction:
             return AnyView(ReactionQuestion(block: block, accent: accent, answer: answer, onAnswer: onAnswer))
         case .thisOrThat:
@@ -187,44 +188,136 @@ private struct StarRatingQuestion: View {
 
 // MARK: - NPS
 
+private func npsBandColor(_ style: NpsStyle, _ score: Int) -> Color {
+    let hex: String
+    switch score {
+    case ...6: hex = style.scaleColors.detractors
+    case 7, 8: hex = style.scaleColors.passives
+    default: hex = style.scaleColors.promoters
+    }
+    return Color(hex: hex) ?? .gray
+}
+
 private struct NpsQuestion: View {
     let accent: Color
+    let style: NpsStyle?
     let answer: SurveyAnswer?
     let onAnswer: (SurveyAnswer) -> Void
 
+    /// Tile gap is fixed; the tile side is derived from the measured row width
+    /// so all 11 tiles always fit without overflow.
+    private static let gap: CGFloat = 5
+    @State private var rowWidth: CGFloat = 0
+
     var body: some View {
+        let style = self.style ?? .default
         let selected = Int(answer?.values.first ?? "")
+        let sel = style.selectedTile
+        let baseRadius: CGFloat = style.isCircle ? 999 : CGFloat(style.borderRadius)
+        let selRadius: CGFloat = sel.isCircle ? 999 : CGFloat(sel.borderRadius)
+        let baseBg = Color(hex: style.backgroundColor) ?? .clear
+        let baseBorder = Color(hex: style.borderColor) ?? SurveyTokens.border
+        let textColor = Color(hex: style.textStyle.colorHex) ?? SurveyTokens.textPrimary
+        let textSize = style.textStyle.resolveFontSize(default: 13)
+        let textWeight = style.textStyle.resolveWeight()
+        let tile = rowWidth > 0 ? max(0, (rowWidth - Self.gap * 10) / 11) : 0
         VStack(spacing: 6) {
-            HStack(spacing: 5) {
+            HStack(spacing: Self.gap) {
                 ForEach(0...10, id: \.self) { i in
                     let isOn = selected == i
+                    let band = npsBandColor(style, i)
+                    // Selected tile takes its own style; empty colours fall back
+                    // to the sentiment band so the default look is preserved.
+                    let fill = isOn ? (Color(hex: sel.backgroundColor) ?? band) : baseBg
+                    let borderColor = isOn ? (Color(hex: sel.borderColor) ?? band) : baseBorder
+                    let borderW = CGFloat(isOn ? sel.borderWidth : style.borderWidth)
+                    let radius = isOn ? selRadius : baseRadius
                     Button {
                         onAnswer(SurveyAnswer(values: ["\(i)"]))
                     } label: {
                         ZStack {
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(isOn ? accent : SurveyTokens.surfaceSunken)
-                                .aspectRatio(1, contentMode: .fit)
+                            RoundedRectangle(cornerRadius: radius)
+                                .fill(fill)
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .stroke(isOn ? accent : SurveyTokens.border, lineWidth: 1)
+                                    RoundedRectangle(cornerRadius: radius)
+                                        .stroke(borderColor, lineWidth: borderW)
                                 )
                             Text("\(i)")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(isOn ? .white : SurveyTokens.textPrimary)
+                                .font(.system(size: textSize, weight: textWeight))
+                                .foregroundColor(isOn ? .white : textColor)
                         }
-                        .frame(maxWidth: .infinity)
+                        .frame(width: tile, height: tile)
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                GeometryReader { geo in
+                    Color.clear.onChange(of: geo.size.width, initial: true) { _, w in
+                        rowWidth = w
+                    }
+                }
+            )
             HStack {
                 Text("Not likely").font(.system(size: 11)).foregroundColor(SurveyTokens.textTertiary)
                 Spacer()
                 Text("Extremely likely").font(.system(size: 11)).foregroundColor(SurveyTokens.textTertiary)
             }
         }
+    }
+}
+
+/// Face scale for `nps_emoji` (5 faces) / `nps_smiley` (3 faces) — rounded-square
+/// tiles. The answer is the 1-based face index as a scalar string.
+private struct NpsFaceQuestion: View {
+    let accent: Color
+    let style: NpsStyle?
+    let faceSize: CGFloat
+    let answer: SurveyAnswer?
+    let onAnswer: (SurveyAnswer) -> Void
+
+    var body: some View {
+        let style = self.style ?? .default
+        let faces = style.faces
+        let sel = style.selectedTile
+        let baseRadius: CGFloat = style.isCircle ? 999 : CGFloat(style.borderRadius)
+        let selRadius: CGFloat = sel.isCircle ? 999 : CGFloat(sel.borderRadius)
+        let baseBg = Color(hex: style.backgroundColor) ?? SurveyTokens.surfaceSunken
+        let baseBorder = Color(hex: style.borderColor) ?? SurveyTokens.border
+        let labelColor = Color(hex: style.textStyle.colorHex) ?? SurveyTokens.textPrimary
+        let labelSize = style.textStyle.resolveFontSize(default: 13)
+        let labelWeight = style.textStyle.resolveWeight()
+        let selected = Int(answer?.values.first ?? "")
+        HStack(spacing: 10) {
+            ForEach(Array(faces.enumerated()), id: \.offset) { index, face in
+                let value = index + 1
+                let isOn = selected == value
+                let fill = isOn ? (Color(hex: sel.backgroundColor) ?? accent.opacity(0.12)) : baseBg
+                let borderColor = isOn ? (Color(hex: sel.borderColor) ?? accent) : baseBorder
+                let borderW = CGFloat(isOn ? sel.borderWidth : style.borderWidth)
+                let radius = isOn ? selRadius : baseRadius
+                Button {
+                    onAnswer(SurveyAnswer(values: ["\(value)"]))
+                } label: {
+                    VStack(spacing: 6) {
+                        Text(face.emoji)
+                            .font(.system(size: faceSize))
+                            .frame(width: 56, height: 56)
+                            .background(RoundedRectangle(cornerRadius: radius).fill(fill))
+                            .overlay(RoundedRectangle(cornerRadius: radius).stroke(borderColor, lineWidth: borderW))
+                            .scaleEffect(isOn ? 1.1 : 1.0)
+                        if style.showFaceLabels && !face.label.isEmpty {
+                            Text(face.label)
+                                .font(.system(size: labelSize, weight: labelWeight))
+                                .foregroundColor(isOn ? accent : labelColor)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -443,6 +536,7 @@ private struct ChoiceCardQuestion: View {
                     selected: selected[option.id] == true,
                     multi: multi,
                     accent: accent,
+                    optionStyle: block.optionStyle,
                     showMedia: block.showAnswerMedia,
                     showDescription: block.showAnswerDescriptions,
                     wide: true,
@@ -518,6 +612,7 @@ private struct ChoiceCardRow: View {
     let selected: Bool
     let multi: Bool
     let accent: Color
+    var optionStyle: ElementStyle? = nil
     let showMedia: Bool
     let showDescription: Bool
     let wide: Bool
@@ -552,13 +647,15 @@ private struct ChoiceCardRow: View {
                             SurveyTokens.surfaceSunken
                         }
                         .frame(width: 36, height: 36)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
                     }
 
-                    Text(option.label)
-                        .font(.system(size: OptionDefaults.sizePt))
-                        .foregroundColor(OptionDefaults.color)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    StyledText(
+                        text: option.label,
+                        style: optionStyle ?? ElementStyle(),
+                        accent: accent,
+                        defaults: OptionDefaults
+                    )
                 }
                 if showDescription, let desc = option.description, !desc.isEmpty {
                     Text(desc)
@@ -568,7 +665,7 @@ private struct ChoiceCardRow: View {
                 }
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.vertical, 10)
             .frame(maxWidth: wide ? .infinity : nil, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 10)

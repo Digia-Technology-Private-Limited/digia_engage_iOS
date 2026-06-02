@@ -45,5 +45,6 @@ public enum Digia {
             || ctrl.activeStoryOverlay != nil
             || ctrl.activeBottomSheet != nil
             || ctrl.activeDialog != nil
+            || SDKInstance.shared.surveyOrchestrator.state != nil
     }
 }

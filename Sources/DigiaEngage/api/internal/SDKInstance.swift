@@ -13,7 +13,6 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
 
     private var activePlugin: DigiaCEPPlugin?
     private(set) var fontFactory: DUIFontFactory = DefaultFontFactory()
-    private let campaignStore = CampaignStore()
     private var messageSubscribers: [String: [UUID: @Sendable (JSONValue?) -> Void]] = [:]
     private var appStateStore: AppStateStore?
     private var localStateStores: [String: StateContext] = [:]
@@ -32,6 +31,7 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
     private(set) var lastShareRequest: (message: String, subject: String?)?
     private(set) var lastDialogDismissed = false
     private(set) var lastBottomSheetDismissed = false
+    private var completedSurveyToken: Int64?
 
     private init() {
         controller.onEvent = { [weak self] event, payload in
@@ -84,24 +84,22 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
 
     func triggerCampaign(_ campaignId: String) {
         guard sdkState == .ready else {
-            print("[Digia] triggerCampaign(\(campaignId)) — sdkState=\(sdkState), not ready")
+            logVerbose("triggerCampaign(\(campaignId)) — sdkState=\(sdkState), not ready")
             return
         }
         guard
             let campaign = campaignStore.findById(campaignId) ?? campaignStore.findByKey(campaignId)
         else {
-            print("[Digia] triggerCampaign(\(campaignId)) — campaign not found in store")
+            logVerbose("triggerCampaign(\(campaignId)) — campaign not found in store")
             return
         }
-        print(
-            "[Digia] triggerCampaign(\(campaignId)) — found campaign type=\(campaign.campaignType) key=\(campaign.campaignKey) surveyConfig=\(campaign.surveyConfig?.keys.sorted() ?? [])"
+        // Build a campaign-key payload and route through the shared dispatch,
+        // resolving the full campaign + campaignType (mirrors Android).
+        let payload = InAppPayload(
+            id: campaign.campaignKey,
+            content: InAppPayloadContent(type: campaign.campaignType, campaignKey: campaign.campaignKey),
+            cepContext: ["campaignId": campaign.id, "campaignKey": campaign.campaignKey]
         )
-        guard let payload = makePayload(for: campaign) else {
-            print(
-                "[Digia] triggerCampaign(\(campaignId)) — makePayload returned nil (type must be 'survey' AND surveyConfig non-nil)"
-            )
-            return
-        }
         onCampaignTriggered(payload)
     }
 
@@ -145,11 +143,19 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         // (campaign_key ?? digiaKey ?? payload.id) and route whenever the resolved
         // key matches a known campaign, so inline/survey/nudge/guide campaigns
         // delivered without an explicit content.campaignKey still work.
+        func argKey(_ key: String) -> String? {
+            if case let .string(value)? = payload.content.args[key] {
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty ? nil : trimmed
+            }
+            return nil
+        }
         let explicitKey = payload.content.campaignKey?.trimmingCharacters(
             in: .whitespacesAndNewlines)
         let fallbackKey = payload.id.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedKey =
             (explicitKey?.isEmpty == false ? explicitKey : nil)
+            ?? argKey("campaign_key") ?? argKey("campaignKey")
             ?? (fallbackKey.isEmpty ? nil : fallbackKey)
         if let campaignKey = resolvedKey, campaignStore.find(campaignKey) != nil {
             routeByCampaignKey(campaignKey, payload: payload)
@@ -214,6 +220,25 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
             guideOrchestrator.start(campaign)
         case .nudge:
             controller.show(payload)
+        case .survey(let cfg):
+            let routed = InAppPayload(
+                id: campaign.campaignKey,
+                content: InAppPayloadContent(
+                    type: "survey",
+                    command: "SHOW_SURVEY",
+                    args: [
+                        "campaign_key": .string(campaign.campaignKey),
+                        "campaign_id": .string(campaign.id),
+                    ],
+                    campaignKey: campaign.campaignKey
+                ),
+                cepContext: payload.cepContext.isEmpty
+                    ? ["campaignId": campaign.id, "campaignKey": campaign.campaignKey]
+                    : payload.cepContext
+            )
+            if !surveyOrchestrator.start(payload: routed, config: cfg) {
+                logVerbose("survey campaign dropped: another survey is on screen: \(key)")
+            }
         }
     }
 
@@ -232,30 +257,8 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
     //
     // CEP plugin sees: Impressed (started), Dismissed (closed without finishing).
     // Internal analytics (TBD) sees: Answered, Completed.
-
-    private func startSurvey(payload: InAppPayload) {
-        guard let surveyJson = payload.content.args["survey_config"] else {
-            print(
-                "[Digia] startSurvey — args has no 'survey_config' key. args keys=\(payload.content.args.keys.sorted())"
-            )
-            return
-        }
-        guard case .object(let dict) = surveyJson else {
-            print("[Digia] startSurvey — 'survey_config' is not an object")
-            return
-        }
-        print("[Digia] startSurvey — survey_config keys=\(dict.keys.sorted())")
-        guard let config = SurveyConfigModel.from(dict, fallbackId: payload.id) else {
-            print(
-                "[Digia] startSurvey — SurveyConfigModel.from(...) returned nil (likely missing/empty 'blocks' or 'nodes' arrays)"
-            )
-            return
-        }
-        let started = surveyOrchestrator.start(payload: payload, config: config)
-        print(
-            "[Digia] startSurvey — orchestrator.start returned \(started) (false if config has empty nodes/blocks OR another survey is already showing). nodes=\(config.nodes.count) blocks=\(config.blocks.count)"
-        )
-    }
+    // Surveys are started from `routeByCampaignKey` once a `survey` campaign is
+    // resolved from the store, so there is no separate `startSurvey` entry point.
 
     /// Fired once when the survey first becomes visible (treated as an impression).
     func reportSurveyStarted() {
@@ -270,13 +273,21 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
     }
 
     func markSurveyCompleted(response: [String: JSONValue], answers: [String: SurveyAnswer] = [:]) {
+        reportSurveyCompleted(response: response, answers: answers)
+        surveyOrchestrator.dismiss()
+    }
+
+    func reportSurveyCompleted(response: [String: JSONValue], answers: [String: SurveyAnswer] = [:]) {
         guard let state = surveyOrchestrator.state else { return }
+        if completedSurveyToken == state.token { return }
+        completedSurveyToken = state.token
         // Internal completion event would record `response` here.
         _ = response
         if !answers.isEmpty,
             let config = self.config,
             let campaignId = state.payload.cepContext["campaignId"]
         {
+            NSLog("[Digia] survey submission started: campaignId=\(campaignId), answers=\(answers.count)")
             SurveySubmissionReporter(config: config).report(
                 campaignId: campaignId,
                 survey: state.config,
@@ -284,73 +295,9 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
                 startedAt: state.startedAt
             )
         }
-        activePlugin?.notifyEvent(.dismissed, payload: state.payload)
-        surveyOrchestrator.dismiss()
     }
 
-    func markSurveyDismissed() {
-        guard let state = surveyOrchestrator.state else { return }
-        activePlugin?.notifyEvent(.dismissed, payload: state.payload)
-        surveyOrchestrator.dismiss()
-    }
-
-    // MARK: - Survey lifecycle
-    //
-    // CEP plugin sees: Impressed (started), Dismissed (closed without finishing).
-    // Internal analytics (TBD) sees: Answered, Completed.
-
-    private func startSurvey(payload: InAppPayload) {
-        guard let surveyJson = payload.content.args["survey_config"] else {
-            print(
-                "[Digia] startSurvey — args has no 'survey_config' key. args keys=\(payload.content.args.keys.sorted())"
-            )
-            return
-        }
-        guard case .object(let dict) = surveyJson else {
-            print("[Digia] startSurvey — 'survey_config' is not an object")
-            return
-        }
-        print("[Digia] startSurvey — survey_config keys=\(dict.keys.sorted())")
-        guard let config = SurveyConfigModel.from(dict, fallbackId: payload.id) else {
-            print(
-                "[Digia] startSurvey — SurveyConfigModel.from(...) returned nil (likely missing/empty 'blocks' or 'nodes' arrays)"
-            )
-            return
-        }
-        let started = surveyOrchestrator.start(payload: payload, config: config)
-        print(
-            "[Digia] startSurvey — orchestrator.start returned \(started) (false if config has empty nodes/blocks OR another survey is already showing). nodes=\(config.nodes.count) blocks=\(config.blocks.count)"
-        )
-    }
-
-    /// Fired once when the survey first becomes visible (treated as an impression).
-    func reportSurveyStarted() {
-        guard let state = surveyOrchestrator.state else { return }
-        activePlugin?.notifyEvent(.impressed, payload: state.payload)
-    }
-
-    func reportSurveyAnswered(stepId: String, answer: [String: JSONValue]) {
-        // Internal-only event; no CEP notification. Hook for future analytics.
-        _ = stepId
-        _ = answer
-    }
-
-    func markSurveyCompleted(response: [String: JSONValue], answers: [String: SurveyAnswer] = [:]) {
-        guard let state = surveyOrchestrator.state else { return }
-        // Internal completion event would record `response` here.
-        _ = response
-        if !answers.isEmpty,
-            let config = self.config,
-            let campaignId = state.payload.cepContext["campaignId"]
-        {
-            SurveySubmissionReporter(config: config).report(
-                campaignId: campaignId,
-                survey: state.config,
-                answers: answers,
-                startedAt: state.startedAt
-            )
-        }
-        activePlugin?.notifyEvent(.dismissed, payload: state.payload)
+    func dismissCompletedSurvey() {
         surveyOrchestrator.dismiss()
     }
 
@@ -403,9 +350,6 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
     }
 
     @discardableResult
-    func addMessageListener(name: String, listener: @escaping @Sendable (JSONValue?) -> Void)
-        -> UUID
-    {
     func addMessageListener(name: String, listener: @escaping @Sendable (JSONValue?) -> Void)
         -> UUID
     {
@@ -495,35 +439,5 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
-    }
-}
-
-@MainActor
-final class InlineCampaignController: ObservableObject {
-    @Published private var campaigns: [String: InAppPayload] = [:]
-    var onEvent: ((DigiaExperienceEvent, InAppPayload) -> Void)?
-
-    func getCampaign(_ placementKey: String) -> InAppPayload? {
-        campaigns[placementKey]
-    }
-
-    func setCampaign(_ placementKey: String, payload: InAppPayload) {
-        var next = campaigns
-        next[placementKey] = payload
-        campaigns = next
-    }
-
-    func removeCampaign(_ campaignID: String) {
-        campaigns = campaigns.filter { placementKey, payload in
-            placementKey != campaignID && payload.id != campaignID
-        }
-    }
-
-    func dismissCampaign(_ placementKey: String) {
-        campaigns.removeValue(forKey: placementKey)
-    }
-
-    func clear() {
-        campaigns.removeAll()
     }
 }

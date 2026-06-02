@@ -1,8 +1,13 @@
 import Foundation
 
-// Survey schema delivered alongside an InAppPayload for `campaign_type == "survey"`
-// campaigns. 1:1 mirror of the dashboard `Survey` type (see dashboard
-// `src/types/survey.types.ts`) and of the Android SDK's `SurveyConfigModel.kt`.
+// Survey schema delivered by the getCampaigns API inside a `campaign_type ==
+// "survey"` campaign's `surveyConfig`. 1:1 mirror of the dashboard `Survey`
+// type (see dashboard `src/types/survey.types.ts`) and of the Android SDK's
+// `SurveyConfigModel.kt`.
+//
+// Naming convention: the wire is camelCase throughout (the dashboard persists
+// `widgetConfig` verbatim and oxlint enforces camelCase). All keys read here
+// MUST be camelCase.
 
 // MARK: - Enums
 
@@ -11,6 +16,8 @@ enum SurveyBlockType: String {
     case multiSelect = "multi_select"
     case rating
     case nps
+    case npsEmoji = "nps_emoji"
+    case npsSmiley = "nps_smiley"
     case reaction
     case thisOrThat = "this_or_that"
     case tierList = "tier_list"
@@ -26,6 +33,8 @@ enum SurveyBlockType: String {
 
     var isContent: Bool { self == .welcome || self == .textMedia || self == .resultPage }
     var isMultiSelect: Bool { self == .multiSelect || self == .tierList || self == .upvote }
+    /// Any of the NPS skins (numeric grid + face scales).
+    var isNps: Bool { self == .nps || self == .npsEmoji || self == .npsSmiley }
     var isChoice: Bool {
         switch self {
         case .singleSelect, .multiSelect, .reaction, .thisOrThat, .tierList, .upvote: return true
@@ -42,7 +51,7 @@ enum SurveyBlockType: String {
     /// lands. Multi-select / text inputs always need the explicit Next CTA.
     var isAutoAdvanceCandidate: Bool {
         switch self {
-        case .singleSelect, .rating, .nps, .reaction: return true
+        case .singleSelect, .rating, .nps, .npsEmoji, .npsSmiley, .reaction: return true
         default: return false
         }
     }
@@ -61,18 +70,21 @@ enum BranchingType { case linear, byCondition, byParent }
 enum BranchTargetKind { case next, node, url, end }
 enum MediaPosition { case top, inline, background }
 enum AnswerLayout { case row, column, grid }
-enum SurveyTextSize { case sm, md, lg, xl }
-enum SurveyFontWeight { case regular, medium, bold }
+enum SurveyFontWeight { case regular, medium, semibold, bold }
 enum SurveyTextAlign { case left, center, right }
 enum SurveyDisplayType { case dialog, bottomSheet }
 enum DialogWidthPreset { case small, medium, large, custom }
 enum BottomSheetHeightMode { case wrap, half, full, custom }
 enum PaginationStyle { case continuous, segmented }
+enum CtaLayout { case inline, stacked }
+// (text size is now a numeric px value on ElementStyle, not an enum)
+enum CtaArrangement { case spaceBetween, spaceEvenly, center, start, end }
 
 // MARK: - Styling primitives
 
 struct ElementStyle: Equatable {
-    var size: SurveyTextSize = .md
+    /// Font size in pixels; 0 means "inherit the element default".
+    var size: Double = 0
     var weight: SurveyFontWeight = .regular
     var align: SurveyTextAlign = .left
     /// Empty colorHex inherits theme default.
@@ -81,7 +93,7 @@ struct ElementStyle: Equatable {
     static func from(_ json: [String: JSONValue]?) -> ElementStyle {
         guard let json else { return ElementStyle() }
         return ElementStyle(
-            size: SurveyParse.textSize(SurveyParse.string(json["size"])),
+            size: SurveyParse.double(json["size"]) ?? 0,
             weight: SurveyParse.fontWeight(SurveyParse.string(json["weight"])),
             align: SurveyParse.textAlign(SurveyParse.string(json["align"])),
             colorHex: SurveyParse.string(json["color"]) ?? ""
@@ -129,9 +141,9 @@ struct BlockMedia: Equatable {
 struct SurveyOption: Equatable, Identifiable {
     let id: String
     let label: String
-    /// Optional secondary line — surfaced when the block's `show_answer_descriptions` is on.
+    /// Optional secondary line — surfaced when the block's `showAnswerDescriptions` is on.
     let description: String?
-    /// Optional thumbnail — surfaced when the block's `show_answer_media` is on.
+    /// Optional thumbnail — surfaced when the block's `showAnswerMedia` is on.
     let media: BlockMedia?
 
     static func from(_ json: [String: JSONValue]) -> SurveyOption? {
@@ -141,6 +153,128 @@ struct SurveyOption: Equatable, Identifiable {
         let media = SurveyParse.object(json["media"]).map(BlockMedia.from).flatMap { $0.hasUrl ? $0 : nil }
         let description = SurveyParse.string(json["description"]).flatMap { $0.isEmpty ? nil : $0 }
         return SurveyOption(id: id, label: label, description: description, media: media)
+    }
+}
+
+// MARK: - NPS styling
+
+/// One value per sentiment band: detractors 0–6, passives 7–8, promoters 9–10.
+struct NpsSentiment: Equatable {
+    let detractors: String
+    let passives: String
+    let promoters: String
+
+    static func from(_ json: [String: JSONValue]?, defaults: NpsSentiment) -> NpsSentiment {
+        guard let json else { return defaults }
+        func pick(_ key: String, _ def: String) -> String {
+            SurveyParse.string(json[key]).flatMap { $0.isEmpty ? nil : $0 } ?? def
+        }
+        return NpsSentiment(
+            detractors: pick("detractors", defaults.detractors),
+            passives: pick("passives", defaults.passives),
+            promoters: pick("promoters", defaults.promoters)
+        )
+    }
+}
+
+/// One editable point on a face scale (`nps_emoji` / `nps_smiley`).
+struct NpsFace: Equatable {
+    let emoji: String
+    let label: String
+
+    static func from(_ json: [String: JSONValue]) -> NpsFace? {
+        let emoji = SurveyParse.string(json["emoji"]) ?? ""
+        guard !emoji.isEmpty else { return nil }
+        return NpsFace(emoji: emoji, label: SurveyParse.string(json["label"]) ?? "")
+    }
+}
+
+/// Tile appearance for the numeric grid (also used for the selected tile).
+struct NpsTileStyle: Equatable {
+    /// "square" | "circle"; circle rounds the tile fully.
+    let shape: String
+    let borderRadius: Double
+    let borderWidth: Double
+    let borderColor: String
+    let backgroundColor: String
+
+    static let `default` = NpsTileStyle(
+        shape: "square", borderRadius: 8, borderWidth: 1, borderColor: "", backgroundColor: ""
+    )
+
+    var isCircle: Bool { shape == "circle" }
+
+    static func from(_ json: [String: JSONValue]?) -> NpsTileStyle {
+        guard let json else { return .default }
+        return NpsTileStyle(
+            shape: SurveyParse.string(json["shape"]) ?? "square",
+            borderRadius: SurveyParse.double(json["borderRadius"]) ?? 8,
+            borderWidth: SurveyParse.double(json["borderWidth"]) ?? 1,
+            borderColor: SurveyParse.string(json["borderColor"]) ?? "",
+            backgroundColor: SurveyParse.string(json["backgroundColor"]) ?? ""
+        )
+    }
+}
+
+/// Presentation styling shared across the NPS variants. Empty-string colours
+/// inherit the theme / sentiment-band default.
+struct NpsStyle: Equatable {
+    // Numeric grid tiles (`nps`)
+    let shape: String
+    let borderRadius: Double
+    let borderWidth: Double
+    let borderColor: String
+    let backgroundColor: String
+    let selectedTile: NpsTileStyle
+    // Scale text (numbers / face captions)
+    let textStyle: ElementStyle
+    // Sentiment palette
+    let scaleColors: NpsSentiment
+    let tierEmojis: NpsSentiment
+    let selectedBgColor: String
+    // Face scales (`nps_emoji` / `nps_smiley`)
+    let faces: [NpsFace]
+    let showFaceLabels: Bool
+
+    var isCircle: Bool { shape == "circle" }
+
+    static let defaultScaleColors = NpsSentiment(
+        detractors: "#F2675A", passives: "#D7C928", promoters: "#55B82E"
+    )
+    static let defaultTierEmojis = NpsSentiment(detractors: "😡", passives: "😐", promoters: "😍")
+
+    // Defaults mirror the dashboard `defaultNpsStyle`.
+    static let `default` = NpsStyle(
+        shape: "square", borderRadius: 8, borderWidth: 1,
+        borderColor: "#E4E6EB", backgroundColor: "#F4F5F8",
+        selectedTile: .default,
+        textStyle: ElementStyle(size: 13, weight: .semibold, align: .center, colorHex: "#1A1D24"),
+        scaleColors: defaultScaleColors, tierEmojis: defaultTierEmojis,
+        selectedBgColor: "#FFFFFF", faces: [], showFaceLabels: true
+    )
+
+    static func from(_ json: [String: JSONValue]?) -> NpsStyle? {
+        guard let json else { return nil }
+        func hex(_ key: String, _ def: String) -> String {
+            SurveyParse.string(json[key]).flatMap { $0.isEmpty ? nil : $0 } ?? def
+        }
+        let faces = (SurveyParse.array(json["faces"]) ?? [])
+            .compactMap { SurveyParse.object($0) }
+            .compactMap(NpsFace.from)
+        return NpsStyle(
+            shape: SurveyParse.string(json["shape"]) ?? "square",
+            borderRadius: SurveyParse.double(json["borderRadius"]) ?? 8,
+            borderWidth: SurveyParse.double(json["borderWidth"]) ?? 1,
+            borderColor: hex("borderColor", "#E4E6EB"),
+            backgroundColor: hex("backgroundColor", "#F4F5F8"),
+            selectedTile: NpsTileStyle.from(SurveyParse.object(json["selectedTile"])),
+            textStyle: ElementStyle.from(SurveyParse.object(json["textStyle"])),
+            scaleColors: NpsSentiment.from(SurveyParse.object(json["scaleColors"]), defaults: defaultScaleColors),
+            tierEmojis: NpsSentiment.from(SurveyParse.object(json["tierEmojis"]), defaults: defaultTierEmojis),
+            selectedBgColor: hex("selectedBgColor", "#FFFFFF"),
+            faces: faces,
+            showFaceLabels: SurveyParse.bool(json["showFaceLabels"]) ?? true
+        )
     }
 }
 
@@ -156,7 +290,7 @@ struct Condition: Equatable {
     static func from(_ json: [String: JSONValue]) -> Condition? {
         guard let op = SurveyParse.conditionOperator(SurveyParse.string(json["operator"])) else { return nil }
         return Condition(
-            nodeId: SurveyParse.snakeOrCamel(json, snake: "node_id", camel: "nodeId"),
+            nodeId: SurveyParse.nonBlank(json["nodeId"]),
             operator: op,
             values: SurveyParse.stringArray(json["values"])
         )
@@ -205,7 +339,7 @@ struct BranchTarget: Equatable {
         guard let json else { return .next }
         return BranchTarget(
             kind: SurveyParse.targetKind(SurveyParse.string(json["kind"])),
-            nodeId: SurveyParse.snakeOrCamel(json, snake: "node_id", camel: "nodeId"),
+            nodeId: SurveyParse.nonBlank(json["nodeId"]),
             url: SurveyParse.string(json["url"]) ?? ""
         )
     }
@@ -237,12 +371,11 @@ struct NodeBranching: Equatable {
         let rules = (SurveyParse.array(json["rules"]) ?? [])
             .compactMap { SurveyParse.object($0) }
             .compactMap(BranchRule.from)
-        let defaultTargetJson = SurveyParse.object(json["defaultTarget"]) ?? SurveyParse.object(json["default_target"])
         return NodeBranching(
             type: SurveyParse.branchingType(SurveyParse.string(json["type"])),
             rules: rules,
-            parentNodeId: SurveyParse.snakeOrCamel(json, snake: "parent_node_id", camel: "parentNodeId"),
-            defaultTarget: BranchTarget.from(defaultTargetJson)
+            parentNodeId: SurveyParse.nonBlank(json["parentNodeId"]),
+            defaultTarget: BranchTarget.from(SurveyParse.object(json["defaultTarget"]))
         )
     }
 }
@@ -255,15 +388,25 @@ struct SurveyBlock: Equatable {
     let title: RichText
     let body: RichText?
     let options: [SurveyOption]
+    /// Shared text style applied to every answer option (select-style blocks).
+    let optionStyle: ElementStyle?
+    /// Presentation styling for the NPS variants.
+    let npsStyle: NpsStyle?
     let required: Bool
+    /// When true the block is kept in the survey but skipped at runtime.
+    let hidden: Bool
     let showMedia: Bool
     let media: BlockMedia
+    /// Show the block category tag/pill above the content.
+    let showTag: Bool
     let showAnswerMedia: Bool
     let showAnswerDescriptions: Bool
     let shuffle: Bool
     let allowOther: Bool
     let flexibleHeight: Bool
     let answerLayout: AnswerLayout
+    /// Block surface background; an empty string inherits the survey surface.
+    let backgroundColor: String
     /// NUMBER-block constraints. nil means unbounded on that side.
     let numberMin: Double?
     let numberMax: Double?
@@ -278,26 +421,29 @@ struct SurveyBlock: Equatable {
             .compactMap { SurveyParse.object($0) }
             .compactMap(SurveyOption.from)
         let options = parsedOptions.isEmpty ? SurveyParse.fallbackOptions(for: type) : parsedOptions
-        let showWhen = ConditionExpr.from(SurveyParse.object(json["showWhen"]))
-            ?? ConditionExpr.from(SurveyParse.object(json["show_when"]))
         return SurveyBlock(
             id: id,
             type: type,
             title: title,
             body: RichText.from(SurveyParse.object(json["body"])),
             options: options,
+            optionStyle: SurveyParse.object(json["optionStyle"]).map(ElementStyle.from),
+            npsStyle: NpsStyle.from(SurveyParse.object(json["npsStyle"])),
             required: SurveyParse.bool(json["required"]) ?? false,
-            showMedia: SurveyParse.bool(json["show_media"]) ?? false,
+            hidden: SurveyParse.bool(json["hidden"]) ?? false,
+            showMedia: SurveyParse.bool(json["showMedia"]) ?? false,
             media: BlockMedia.from(SurveyParse.object(json["media"])),
-            showAnswerMedia: SurveyParse.bool(json["show_answer_media"]) ?? false,
-            showAnswerDescriptions: SurveyParse.bool(json["show_answer_descriptions"]) ?? false,
+            showTag: SurveyParse.bool(json["showTag"]) ?? true,
+            showAnswerMedia: SurveyParse.bool(json["showAnswerMedia"]) ?? false,
+            showAnswerDescriptions: SurveyParse.bool(json["showAnswerDescriptions"]) ?? false,
             shuffle: SurveyParse.bool(json["shuffle"]) ?? false,
-            allowOther: SurveyParse.bool(json["allow_other"]) ?? false,
-            flexibleHeight: SurveyParse.bool(json["flexible_height"]) ?? false,
-            answerLayout: SurveyParse.answerLayout(SurveyParse.string(json["answer_layout"])),
+            allowOther: SurveyParse.bool(json["allowOther"]) ?? false,
+            flexibleHeight: SurveyParse.bool(json["flexibleHeight"]) ?? false,
+            answerLayout: SurveyParse.answerLayout(SurveyParse.string(json["answerLayout"])),
+            backgroundColor: SurveyParse.string(json["backgroundColor"]) ?? "",
             numberMin: SurveyParse.double(json["min"]),
             numberMax: SurveyParse.double(json["max"]),
-            showWhen: showWhen
+            showWhen: ConditionExpr.from(SurveyParse.object(json["showWhen"]))
         )
     }
 }
@@ -311,7 +457,7 @@ struct SurveyNode: Equatable, Identifiable {
 
     static func from(_ json: [String: JSONValue]) -> SurveyNode? {
         guard let id = SurveyParse.string(json["id"]), !id.isEmpty,
-              let blockId = SurveyParse.snakeOrCamel(json, snake: "block_id", camel: "blockId") else { return nil }
+              let blockId = SurveyParse.nonBlank(json["blockId"]) else { return nil }
         return SurveyNode(id: id, blockId: blockId, branching: NodeBranching.from(SurveyParse.object(json["branching"])))
     }
 }
@@ -333,14 +479,14 @@ struct DialogProps: Equatable {
 
     static func from(_ json: [String: JSONValue]?) -> DialogProps {
         guard let json else { return .default }
-        let opacity = max(0, min(1, SurveyParse.double(json["backdrop_opacity"]) ?? 0.4))
+        let opacity = max(0, min(1, SurveyParse.double(json["backdropOpacity"]) ?? 0.4))
         return DialogProps(
             width: SurveyParse.dialogWidth(SurveyParse.string(json["width"])),
-            customWidth: SurveyParse.int(json["custom_width"]) ?? 0,
-            cornerRadius: SurveyParse.int(json["corner_radius"]) ?? 20,
+            customWidth: SurveyParse.int(json["customWidth"]) ?? 0,
+            cornerRadius: SurveyParse.int(json["cornerRadius"]) ?? 20,
             backdropOpacity: opacity,
-            backdropDismissible: SurveyParse.bool(json["backdrop_dismissible"]) ?? true,
-            showCloseButton: SurveyParse.bool(json["show_close_button"]) ?? true
+            backdropDismissible: SurveyParse.bool(json["backdropDismissible"]) ?? true,
+            showCloseButton: SurveyParse.bool(json["showCloseButton"]) ?? true
         )
     }
 }
@@ -362,12 +508,12 @@ struct BottomSheetProps: Equatable {
     static func from(_ json: [String: JSONValue]?) -> BottomSheetProps {
         guard let json else { return .default }
         return BottomSheetProps(
-            heightMode: SurveyParse.sheetHeight(SurveyParse.string(json["height_mode"])),
-            customHeight: SurveyParse.int(json["custom_height"]) ?? 0,
-            cornerRadius: SurveyParse.int(json["corner_radius"]) ?? 20,
-            showHandle: SurveyParse.bool(json["show_handle"]) ?? true,
+            heightMode: SurveyParse.sheetHeight(SurveyParse.string(json["heightMode"])),
+            customHeight: SurveyParse.int(json["customHeight"]) ?? 0,
+            cornerRadius: SurveyParse.int(json["cornerRadius"]) ?? 20,
+            showHandle: SurveyParse.bool(json["showHandle"]) ?? true,
             draggable: SurveyParse.bool(json["draggable"]) ?? true,
-            backdropDismissible: SurveyParse.bool(json["backdrop_dismissible"]) ?? true
+            backdropDismissible: SurveyParse.bool(json["backdropDismissible"]) ?? true
         )
     }
 }
@@ -391,7 +537,29 @@ struct SurveyDisplay: Equatable {
         return SurveyDisplay(
             type: SurveyParse.displayType(SurveyParse.string(json["type"])),
             dialog: DialogProps.from(SurveyParse.object(json["dialog"])),
-            bottomSheet: BottomSheetProps.from(SurveyParse.object(json["bottom_sheet"]))
+            bottomSheet: BottomSheetProps.from(SurveyParse.object(json["bottomSheet"]))
+        )
+    }
+}
+
+/// Visual styling for the progress indicator. Empty colours inherit defaults.
+struct ProgressIndicatorStyle: Equatable {
+    let activeColorHex: String
+    let trackColorHex: String
+    let height: Double
+    let cornerRadius: Double
+
+    static let `default` = ProgressIndicatorStyle(
+        activeColorHex: "", trackColorHex: "", height: 3, cornerRadius: 2
+    )
+
+    static func from(_ json: [String: JSONValue]?) -> ProgressIndicatorStyle {
+        guard let json else { return .default }
+        return ProgressIndicatorStyle(
+            activeColorHex: SurveyParse.string(json["activeColor"]) ?? "",
+            trackColorHex: SurveyParse.string(json["trackColor"]) ?? "",
+            height: max(1, SurveyParse.double(json["height"]) ?? 3),
+            cornerRadius: max(0, SurveyParse.double(json["cornerRadius"]) ?? 2)
         )
     }
 }
@@ -402,10 +570,11 @@ struct PaginationSettings: Equatable {
     let onlyShowOnQuestionBlock: Bool
     let backButton: Bool
     let paginationStyle: PaginationStyle
+    let progressIndicatorStyle: ProgressIndicatorStyle
 
     static let `default` = PaginationSettings(
         numberOfPages: false, progressbar: true, onlyShowOnQuestionBlock: true,
-        backButton: true, paginationStyle: .continuous
+        backButton: true, paginationStyle: .continuous, progressIndicatorStyle: .default
     )
 
     static func from(_ json: [String: JSONValue]?) -> PaginationSettings {
@@ -415,7 +584,8 @@ struct PaginationSettings: Equatable {
             progressbar: SurveyParse.bool(json["progressbar"]) ?? true,
             onlyShowOnQuestionBlock: SurveyParse.bool(json["onlyShowOnQuestionBlock"]) ?? true,
             backButton: SurveyParse.bool(json["backButton"]) ?? true,
-            paginationStyle: SurveyParse.paginationStyle(SurveyParse.string(json["paginationStyle"]))
+            paginationStyle: SurveyParse.paginationStyle(SurveyParse.string(json["paginationStyle"])),
+            progressIndicatorStyle: ProgressIndicatorStyle.from(SurveyParse.object(json["progressIndicatorStyle"]))
         )
     }
 }
@@ -444,16 +614,55 @@ struct SurveyTimerSettings: Equatable {
     }
 }
 
+/// Styling, layout, and labels for the navigation CTA buttons (Next / Back, the
+/// welcome "Start", the terminal "Done"). Empty colours inherit the theme accent / white.
+struct CtaSettings: Equatable {
+    let layout: CtaLayout
+    let arrangement: CtaArrangement
+    let nextLabel: String
+    let backLabel: String
+    let doneLabel: String
+    let startLabel: String
+    let bgColorHex: String
+    let textColorHex: String
+    let cornerRadius: Int
+
+    static let `default` = CtaSettings(
+        layout: .stacked, arrangement: .spaceBetween,
+        nextLabel: "Next", backLabel: "Back", doneLabel: "Done", startLabel: "Start",
+        bgColorHex: "", textColorHex: "", cornerRadius: 8
+    )
+
+    static func from(_ json: [String: JSONValue]?) -> CtaSettings {
+        guard let json else { return .default }
+        func label(_ key: String, _ def: String) -> String {
+            SurveyParse.string(json[key]).flatMap { $0.isEmpty ? nil : $0 } ?? def
+        }
+        return CtaSettings(
+            layout: SurveyParse.ctaLayout(SurveyParse.string(json["layout"])),
+            arrangement: SurveyParse.ctaArrangement(SurveyParse.string(json["arrangement"])),
+            nextLabel: label("nextLabel", "Next"),
+            backLabel: label("backLabel", "Back"),
+            doneLabel: label("doneLabel", "Done"),
+            startLabel: label("startLabel", "Start"),
+            bgColorHex: SurveyParse.string(json["bgColor"]) ?? "",
+            textColorHex: SurveyParse.string(json["textColor"]) ?? "",
+            cornerRadius: max(0, min(48, SurveyParse.int(json["cornerRadius"]) ?? 8))
+        )
+    }
+}
+
 struct SurveySettings: Equatable {
     let pagination: PaginationSettings
     let autoAdvance: Bool
     let chooseButton: Bool
+    let cta: CtaSettings
     let timer: SurveyTimerSettings
     let display: SurveyDisplay
 
     static let `default` = SurveySettings(
         pagination: .default, autoAdvance: false, chooseButton: true,
-        timer: .default, display: .default
+        cta: .default, timer: .default, display: .default
     )
 
     static func from(_ json: [String: JSONValue]?) -> SurveySettings {
@@ -462,6 +671,7 @@ struct SurveySettings: Equatable {
             pagination: PaginationSettings.from(SurveyParse.object(json["pagination"])),
             autoAdvance: SurveyParse.bool(json["autoAdvance"]) ?? false,
             chooseButton: SurveyParse.bool(json["chooseButton"]) ?? true,
+            cta: CtaSettings.from(SurveyParse.object(json["cta"])),
             timer: SurveyTimerSettings.from(SurveyParse.object(json["surveyTimer"])),
             display: SurveyDisplay.from(SurveyParse.object(json["display"]))
         )
@@ -478,8 +688,8 @@ struct SurveyTheme: Equatable {
 
     static func from(_ json: [String: JSONValue]?) -> SurveyTheme {
         guard let json else { return .default }
-        let accent = SurveyParse.string(json["accent_color"]).flatMap { $0.isEmpty ? nil : $0 } ?? "#2D6CDF"
-        let background = SurveyParse.string(json["background_color"]).flatMap { $0.isEmpty ? nil : $0 } ?? "#FFFFFF"
+        let accent = SurveyParse.string(json["accentColor"]).flatMap { $0.isEmpty ? nil : $0 } ?? "#2D6CDF"
+        let background = SurveyParse.string(json["backgroundColor"]).flatMap { $0.isEmpty ? nil : $0 } ?? "#FFFFFF"
         return SurveyTheme(accentHex: accent, backgroundHex: background)
     }
 }
@@ -499,7 +709,7 @@ struct SurveyConfigModel: Equatable {
 
     /// O(1) block lookup keyed by block id.
     var blocksById: [String: SurveyBlock] {
-        Dictionary(uniqueKeysWithValues: blocks.map { ($0.id, $0) })
+        Dictionary(blocks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
     func nodeById(_ id: String?) -> SurveyNode? {
@@ -515,27 +725,40 @@ struct SurveyConfigModel: Equatable {
         nodeById(rootNodeId) ?? nodes.first
     }
 
+    /// The welcome screen shown before the node flow, if present and not hidden.
+    /// Welcome blocks are fixed intro chrome, not graph nodes.
+    func welcomeBlock() -> SurveyBlock? {
+        blocks.first { $0.type == .welcome && !$0.hidden }
+    }
+
     static func from(_ json: [String: JSONValue], fallbackId: String) -> SurveyConfigModel? {
         guard let blocksArr = SurveyParse.array(json["blocks"]),
               let nodesArr = SurveyParse.array(json["nodes"]) else { return nil }
         let blocks = blocksArr.compactMap { SurveyParse.object($0) }.compactMap(SurveyBlock.from)
+        // Welcome screens are intro chrome rendered before the flow, never graph
+        // nodes. Drop any legacy welcome node so the flow starts at the first
+        // real block.
+        let welcomeBlockIds = Set(blocks.filter { $0.type == .welcome }.map { $0.id })
         let nodes = nodesArr.compactMap { SurveyParse.object($0) }.compactMap(SurveyNode.from)
+            .filter { !welcomeBlockIds.contains($0.blockId) }
         guard !blocks.isEmpty, !nodes.isEmpty else { return nil }
 
         let id = SurveyParse.firstNonEmpty(
             SurveyParse.string(json["id"]),
             SurveyParse.string(json["_id"]),
-            SurveyParse.string(json["template_id"]),
+            SurveyParse.string(json["templateId"]),
             fallbackId
         )
-        let rootNodeId = SurveyParse.string(json["root_node_id"]).flatMap { $0.isEmpty ? nil : $0 }
+        let rootNodeIdRaw = SurveyParse.string(json["rootNodeId"]).flatMap { $0.isEmpty ? nil : $0 }
+        let rootNodeId = (rootNodeIdRaw.map { id in nodes.contains { $0.id == id } } == true)
+            ? rootNodeIdRaw : nodes.first?.id
         let name = SurveyParse.firstNonEmptyOptional(
             SurveyParse.string(json["name"]),
-            SurveyParse.string(json["survey_name"]),
+            SurveyParse.string(json["surveyName"]),
             SurveyParse.string(json["title"])
         )
-        let uiTemplateId = SurveyParse.string(json["ui_template_id"]).flatMap { $0.isEmpty ? nil : $0 }
-        let timeDelayMs = max(0, min(10_000, SurveyParse.int(json["time_delay_ms"]) ?? 0))
+        let uiTemplateId = SurveyParse.string(json["uiTemplateId"]).flatMap { $0.isEmpty ? nil : $0 }
+        let timeDelayMs = max(0, min(10_000, SurveyParse.int(json["timeDelayMs"]) ?? 0))
 
         return SurveyConfigModel(
             id: id,
@@ -616,9 +839,9 @@ enum SurveyParse {
         return arr.compactMap { string($0).flatMap { $0.isEmpty ? nil : $0 } }
     }
 
-    static func snakeOrCamel(_ json: [String: JSONValue], snake: String, camel: String) -> String? {
-        let raw = string(json[snake]) ?? string(json[camel]) ?? ""
-        guard !raw.isEmpty, raw != "null" else { return nil }
+    /// A non-blank string value, treating literal "null" as absent.
+    static func nonBlank(_ value: JSONValue?) -> String? {
+        guard let raw = string(value), !raw.isEmpty, raw != "null" else { return nil }
         return raw
     }
 
@@ -644,7 +867,10 @@ enum SurveyParse {
         case "single_select", "single_choice", "single": return .singleSelect
         case "multi_select", "multiple_select", "multiple_choice", "multi", "multiple": return .multiSelect
         case "rating", "star", "likert_scale": return .rating
-        case "nps": return .nps
+        // gauge / slider variants render with the numeric grid for now.
+        case "nps", "nps_gauge", "nps_slider": return .nps
+        case "nps_emoji": return .npsEmoji
+        case "nps_smiley": return .npsSmiley
         case "reaction", "smiley", "smiley_scale", "csat": return .reaction
         case "this_or_that": return .thisOrThat
         case "tier_list": return .tierList
@@ -720,18 +946,10 @@ enum SurveyParse {
         }
     }
 
-    static func textSize(_ value: String?) -> SurveyTextSize {
-        switch value?.trimmingCharacters(in: .whitespaces).lowercased() {
-        case "sm": return .sm
-        case "lg": return .lg
-        case "xl": return .xl
-        default: return .md
-        }
-    }
-
     static func fontWeight(_ value: String?) -> SurveyFontWeight {
         switch value?.trimmingCharacters(in: .whitespaces).lowercased() {
         case "medium": return .medium
+        case "semibold", "semi_bold": return .semibold
         case "bold": return .bold
         default: return .regular
         }
@@ -774,6 +992,23 @@ enum SurveyParse {
         switch value?.trimmingCharacters(in: .whitespaces).lowercased() {
         case "segmented": return .segmented
         default: return .continuous
+        }
+    }
+
+    static func ctaLayout(_ value: String?) -> CtaLayout {
+        switch value?.trimmingCharacters(in: .whitespaces).lowercased() {
+        case "inline", "row": return .inline
+        default: return .stacked
+        }
+    }
+
+    static func ctaArrangement(_ value: String?) -> CtaArrangement {
+        switch value?.trimmingCharacters(in: .whitespaces).lowercased() {
+        case "space_evenly": return .spaceEvenly
+        case "center": return .center
+        case "start": return .start
+        case "end": return .end
+        default: return .spaceBetween
         }
     }
 }

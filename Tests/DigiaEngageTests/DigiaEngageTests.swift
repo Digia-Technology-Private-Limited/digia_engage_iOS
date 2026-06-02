@@ -184,31 +184,25 @@ struct DigiaEngageTests {
         #expect(decoded.args == ["name": .string("Ada")])
     }
 
-    @Test("campaign parser accepts Android templateType survey key")
+    @Test("campaign parser accepts Android templateConfig survey key")
     func campaignParserAcceptsAndroidTemplateTypeSurveyKey() throws {
-        let campaign = try #require(CampaignModel.from([
+        let campaign = try #require(CampaignModel.fromJson([
             "id": "campaign-123",
             "campaignKey": "welcome_survey",
             "campaignType": "survey",
             "templateConfig": minimalSurveyTemplate(),
         ]))
 
-        let payload = try #require(campaign.makePayload())
-
-        #expect(payload.id == "welcome_survey")
-        #expect(payload.content.args["campaign_key"] == .string("welcome_survey"))
-        #expect(payload.content.args["campaign_id"] == .string("campaign-123"))
-        if case .object(let surveyConfig)? = payload.content.args["survey_config"] {
-            #expect(surveyConfig["templateType"] == .string("survey"))
-        } else {
-            Issue.record("Expected survey_config object")
-        }
+        #expect(campaign.campaignType == "survey")
+        let config = try #require(campaign.surveyConfig)
+        #expect(config.nodes.count == 1)
+        #expect(config.blocks.contains { $0.id == "block-1" })
     }
 
     @Test("campaign key payload routes through fetched survey campaign")
     func campaignKeyPayloadRoutesThroughFetchedSurveyCampaign() {
         SDKInstance.shared.resetForTesting()
-        let campaign = try! #require(CampaignModel.from([
+        let campaign = try! #require(CampaignModel.fromJson([
             "id": "campaign-123",
             "campaignKey": "welcome_survey",
             "campaignType": "survey",
@@ -913,13 +907,19 @@ private func decode<T: Decodable>(_ json: String, as type: T.Type = T.self) thro
 }
 
 private func minimalSurveyTemplate() -> [String: Any] {
+    // A welcome block is intro chrome (filtered from the node flow), so the
+    // survey also needs at least one real question block + node to be valid.
     [
         "templateType": "survey",
         "blocks": [
             [
                 "id": "block-1",
-                "type": "welcome",
-                "title": ["text": "Welcome"],
+                "type": "single_select",
+                "title": ["text": "How are you?"],
+                "options": [
+                    ["id": "opt_a", "label": "Good"],
+                    ["id": "opt_b", "label": "Bad"],
+                ],
             ],
         ],
         "nodes": [
