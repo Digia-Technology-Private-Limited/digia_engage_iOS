@@ -1,9 +1,9 @@
 import SwiftUI
+import UIKit
 @MainActor
 public struct DigiaHost<Content: View>: View {
     private let content: Content
     @ObservedObject private var controller = SDKInstance.shared.controller
-    @ObservedObject private var guideOrchestrator = SDKInstance.shared.guideOrchestrator
 
     public init(@ViewBuilder content: () -> Content) {
         self.content = content()
@@ -30,32 +30,16 @@ public struct DigiaHost<Content: View>: View {
                 .zIndex(1)
             }
 
-            DigiaToastOverlay(toast: controller.activeToast)
+            GuideOverlayView()
                 .zIndex(2)
+
+            DigiaToastOverlay(toast: controller.activeToast)
+                .zIndex(3)
 
             // Bottom-sheet / dialog nudge — full-screen modal overlay.
             NudgeOverlayView()
                 .zIndex(5)
                 .animation(.easeInOut(duration: 0.25), value: controller.activeNudge)
-
-            // Guide overlay — rendered above everything else
-            if let guideState = guideOrchestrator.activeState {
-                let anchorKey = guideState.currentStep.anchorKey
-                if let anchorRect = AnchorRegistry.shared.find(anchorKey) {
-                    GuideOverlay(
-                        state: guideState,
-                        anchorRect: anchorRect,
-                        orchestrator: guideOrchestrator
-                    )
-                    .ignoresSafeArea()
-                    .zIndex(10)
-                } else {
-                    // Anchor not on screen — dismiss and fire health event
-                    Color.clear.onAppear {
-                        guideOrchestrator.dismiss()
-                    }
-                }
-            }
         }
         .onChange(of: controller.activePayload, initial: false) { _, payload in
             handlePayload(payload)

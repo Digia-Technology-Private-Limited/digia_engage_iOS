@@ -3,8 +3,8 @@ import Foundation
 // Ported from Android `CampaignFetcher.kt` / `DigiaEndpoints`.
 
 enum DigiaEngageEndpoints {
-    static let production = "https://api.digia.tech"
-    static let sandbox = "https://zaiden-phonematic-unseemly.ngrok-free.dev"
+    static let production = "https://app.digia.tech"
+    static let sandbox = "https://dev.digia.tech"
 }
 
 struct CampaignFetcher {
@@ -17,7 +17,13 @@ struct CampaignFetcher {
     }
 
     func fetch() async throws -> [CampaignModel] {
-        let base = (config.environment == .sandbox ? DigiaEngageEndpoints.sandbox : DigiaEngageEndpoints.production)
+        // Honor an explicit baseURL override (DigiaDeveloperConfig.baseURL, set
+        // from the RN `baseUrl` arg) before falling back to environment defaults.
+        // Mirrors Android `CampaignFetcher`: config.baseUrl ?? env default.
+        let base =
+            (config.developerConfig?.baseURL
+            ?? (config.environment == .sandbox
+                ? DigiaEngageEndpoints.sandbox : DigiaEngageEndpoints.production))
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         let fullURL = "\(base)/api/v1/engage/sdk/getCampaigns"
 
@@ -28,7 +34,7 @@ struct CampaignFetcher {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue(config.apiKey, forHTTPHeaderField: "X-Digia-Project-Id")
+        request.setValue(config.apiKey, forHTTPHeaderField: "x-digia-project-id")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 10
         request.httpBody = Data("{}".utf8)

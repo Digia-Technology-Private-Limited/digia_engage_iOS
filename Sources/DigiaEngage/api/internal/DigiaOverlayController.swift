@@ -8,6 +8,12 @@ struct AnchoredOverlayState: Equatable, Sendable {
     let cornerRadius: CGFloat  // spotlight cutout corner radius
 }
 
+struct InlineStoryOverlayState: Equatable {
+    let config: InlineStoryConfig
+    let initialIndex: Int
+    let payload: InAppPayload
+}
+
 @MainActor
 final class DigiaOverlayController: ObservableObject {
     @Published private(set) var activePayload: InAppPayload?
@@ -17,6 +23,7 @@ final class DigiaOverlayController: ObservableObject {
     @Published private(set) var activeNudge: DigiaNudgePresentation?
     @Published private(set) var slotPayloads: [String: InAppPayload] = [:]
     @Published private(set) var activeAnchoredOverlay: AnchoredOverlayState?
+    @Published private(set) var activeStoryOverlay: InlineStoryOverlayState?
 
     private var toastToken = UUID()
     var onEvent: ((DigiaExperienceEvent, InAppPayload) -> Void)?
@@ -107,5 +114,25 @@ final class DigiaOverlayController: ObservableObject {
 
     func dismissAnchored() {
         activeAnchoredOverlay = nil
+    }
+
+    func showStoryOverlay(config: InlineStoryConfig, initialIndex: Int, payload: InAppPayload) {
+        let state = InlineStoryOverlayState(
+            config: config,
+            initialIndex: initialIndex,
+            payload: payload
+        )
+        activeStoryOverlay = state
+        // The full-screen story is presented in its own dedicated UIWindow
+        // (DigiaStoryWindowPresenter), not as an in-host SwiftUI overlay. A
+        // separate key window sits above all React Native content and owns its
+        // touches outright, so taps / swipes / the CTA work without competing
+        // with Fabric's RCTSurfaceTouchHandler.
+        DigiaStoryWindowPresenter.shared.present(state: state)
+    }
+
+    func dismissStoryOverlay() {
+        activeStoryOverlay = nil
+        DigiaStoryWindowPresenter.shared.dismiss()
     }
 }
