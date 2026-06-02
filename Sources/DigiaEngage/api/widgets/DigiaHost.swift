@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 @MainActor
 public struct DigiaHost<Content: View>: View {
     private let content: Content
