@@ -15,6 +15,12 @@ struct HideBottomSheetProcessor {
             ExpressionUtil.evaluateNestedExpressions($0, in: context.scopeContext)
         }
         let controller = SDKInstance.shared.controller
+        // A rendered nudge bottom sheet uses its own overlay channel, not the DSL
+        // bottom-sheet manager. Route its dismiss buttons to the nudge dismissal.
+        if controller.activeNudge != nil {
+            controller.dismissNudge()
+            return
+        }
         if let transition = controller.bottomSheetTransition {
             transition.animateDismiss {
                 if controller.bottomSheetRendersInHost {

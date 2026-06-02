@@ -14,6 +14,7 @@ final class DigiaOverlayController: ObservableObject {
     @Published private(set) var activeBottomSheet: DigiaBottomSheetPresentation?
     @Published private(set) var activeDialog: DigiaDialogPresentation?
     @Published private(set) var activeToast: DigiaToastPresentation?
+    @Published private(set) var activeNudge: DigiaNudgePresentation?
     @Published private(set) var slotPayloads: [String: InAppPayload] = [:]
     @Published private(set) var activeAnchoredOverlay: AnchoredOverlayState?
 
@@ -87,6 +88,17 @@ final class DigiaOverlayController: ObservableObject {
 
     func clearSlots() {
         slotPayloads.removeAll()
+    }
+
+    func showNudge(_ presentation: DigiaNudgePresentation) {
+        activeNudge = presentation
+        onEvent?(.impressed, presentation.payload)
+    }
+
+    func dismissNudge() {
+        guard let presentation = activeNudge else { return }
+        activeNudge = nil
+        onEvent?(.dismissed, presentation.payload)
     }
 
     func showAnchored(_ state: AnchoredOverlayState) {

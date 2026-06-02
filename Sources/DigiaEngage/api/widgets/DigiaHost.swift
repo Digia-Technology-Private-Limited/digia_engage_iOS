@@ -33,6 +33,11 @@ public struct DigiaHost<Content: View>: View {
             DigiaToastOverlay(toast: controller.activeToast)
                 .zIndex(2)
 
+            // Bottom-sheet / dialog nudge — full-screen modal overlay.
+            NudgeOverlayView()
+                .zIndex(5)
+                .animation(.easeInOut(duration: 0.25), value: controller.activeNudge)
+
             // Guide overlay — rendered above everything else
             if let guideState = guideOrchestrator.activeState {
                 let anchorKey = guideState.currentStep.anchorKey

@@ -116,6 +116,13 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
             return
         }
 
+        // Fallback: RN-triggered campaigns may omit `campaignKey`. If the payload id
+        // matches a stored campaign, route by it (covers native nudges via the RN bridge).
+        if campaignStore.find(payload.id) != nil {
+            routeByCampaignKey(payload.id, payload: payload)
+            return
+        }
+
         // Typed path (RN/JS-driven): content already carries display info.
         let displayType = payload.content.type.lowercased()
         let placementKey = payload.content.placementKey?.trimmingCharacters(
@@ -159,14 +166,29 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
                 "campaign_key path: story campaigns not supported natively yet (key '\(key)')")
         case .guide:
             guideOrchestrator.start(campaign)
-        case .nudge:
-            controller.show(payload)
+        case .nudge(let nudgeConfig):
+            let routed = InAppPayload(
+                id: payload.id,
+                content: InAppPayloadContent(
+                    type: "nudge",
+                    args: payload.content.args.merging([
+                        "campaign_type": .string("nudge"),
+                        "display_style": .string(nudgeConfig.templateType.displayStyle),
+                    ]) { _, new in new },
+                    campaignKey: key
+                ),
+                cepContext: payload.cepContext
+            )
+            controller.showNudge(DigiaNudgePresentation(config: nudgeConfig, payload: routed))
         }
     }
 
     func onCampaignInvalidated(_ campaignID: String) {
         if controller.activePayload?.id == campaignID {
             controller.dismiss()
+        }
+        if controller.activeNudge?.payload.id == campaignID {
+            controller.dismissNudge()
         }
         inlineController.removeCampaign(campaignID)
         guideOrchestrator.dismissIfActive(campaignKey: campaignID)
@@ -190,6 +212,7 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         controller.dismissBottomSheet()
         controller.dismissDialog()
         controller.dismissToast()
+        controller.dismissNudge()
         controller.clearSlots()
         inlineController.clear()
         guideOrchestrator.dismiss()
