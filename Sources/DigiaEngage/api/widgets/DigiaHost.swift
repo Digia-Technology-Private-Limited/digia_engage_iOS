@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 @MainActor
 public struct DigiaHost<Content: View>: View {
     private let content: Content
@@ -29,8 +30,11 @@ public struct DigiaHost<Content: View>: View {
                 .zIndex(1)
             }
 
-            DigiaToastOverlay(toast: controller.activeToast)
+            GuideOverlayView()
                 .zIndex(2)
+
+            DigiaToastOverlay(toast: controller.activeToast)
+                .zIndex(3)
         }
         .onChange(of: controller.activePayload, initial: false) { _, payload in
             handlePayload(payload)
