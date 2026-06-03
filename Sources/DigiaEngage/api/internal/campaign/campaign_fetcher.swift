@@ -1,12 +1,5 @@
 import Foundation
 
-// Ported from Android `CampaignFetcher.kt` / `DigiaEndpoints`.
-
-enum DigiaEngageEndpoints {
-    static let production = "https://app.digia.tech"
-    static let sandbox = "https://dev.digia.tech"
-}
-
 struct CampaignFetcher {
     let config: DigiaConfig
     let session: URLSession
@@ -17,14 +10,7 @@ struct CampaignFetcher {
     }
 
     func fetch() async throws -> [CampaignModel] {
-        // Honor an explicit baseURL override (DigiaDeveloperConfig.baseURL, set
-        // from the RN `baseUrl` arg) before falling back to environment defaults.
-        // Mirrors Android `CampaignFetcher`: config.baseUrl ?? env default.
-        let base =
-            (config.developerConfig?.baseURL
-            ?? (config.environment == .sandbox
-                ? DigiaEngageEndpoints.sandbox : DigiaEngageEndpoints.production))
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let base = DigiaEndpoints.base(config: config)
         let fullURL = "\(base)/api/v1/engage/sdk/getCampaigns"
 
         log("[CampaignFetcher] fetching: \(fullURL) (env=\(config.environment))")

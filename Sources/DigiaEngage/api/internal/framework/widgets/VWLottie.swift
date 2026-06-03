@@ -174,8 +174,10 @@ private struct LottieRepresentable: UIViewRepresentable {
 
     private func contentMode(for fit: String?) -> UIView.ContentMode {
         switch fit {
-        case "cover", "fill":
+        case "cover":
             return .scaleAspectFill
+        case "fill":
+            return .scaleToFill
         case "fitWidth", "fitHeight", "contain":
             return .scaleAspectFit
         default:

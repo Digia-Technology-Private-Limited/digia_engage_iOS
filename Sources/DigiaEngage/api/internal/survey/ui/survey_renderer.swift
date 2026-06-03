@@ -552,12 +552,6 @@ private struct SurveyBody: View {
             .padding(.top, 4)
         case .resultPage:
             VStack(alignment: .leading, spacing: 10) {
-                Text("✓ Response recorded. Aggregate results display here for users who completed.")
-                    .font(surveyFont(size: 13))
-                    .foregroundColor(SurveyTokens.textSecondary)
-                    .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(SurveyTokens.surfaceSunken))
                 Button {
                     onCompletedClose()
                 } label: {
@@ -727,10 +721,17 @@ private struct BlockTitleView: View {
 private struct BlockMediaImage: View {
     let media: BlockMedia
 
+    private var contentMode: ContentMode {
+        switch media.boxFit {
+        case "contain": return .fit
+        default: return .fill
+        }
+    }
+
     var body: some View {
         if media.hasUrl, let url = URL(string: media.url) {
             AsyncImage(url: url) { image in
-                image.resizable().aspectRatio(contentMode: .fill)
+                image.resizable().aspectRatio(contentMode: contentMode)
             } placeholder: {
                 SurveyTokens.surfaceSunken
             }

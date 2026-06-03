@@ -123,17 +123,19 @@ struct BlockMedia: Equatable {
     let url: String
     let alt: String
     let position: MediaPosition
+    let boxFit: String
 
     var hasUrl: Bool { !url.isEmpty }
 
-    static let empty = BlockMedia(url: "", alt: "", position: .top)
+    static let empty = BlockMedia(url: "", alt: "", position: .top, boxFit: "cover")
 
     static func from(_ json: [String: JSONValue]?) -> BlockMedia {
         guard let json else { return .empty }
         return BlockMedia(
             url: SurveyParse.string(json["url"]) ?? "",
             alt: SurveyParse.string(json["alt"]) ?? "",
-            position: SurveyParse.mediaPosition(SurveyParse.string(json["position"]))
+            position: SurveyParse.mediaPosition(SurveyParse.string(json["position"])),
+            boxFit: SurveyParse.string(json["boxFit"]) ?? "cover"
         )
     }
 }

@@ -213,9 +213,12 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
                     ],
                     campaignKey: campaign.campaignKey
                 ),
-                cepContext: payload.cepContext.isEmpty
-                    ? ["campaignId": campaign.id, "campaignKey": campaign.campaignKey]
-                    : payload.cepContext
+                cepContext: {
+                    var ctx = payload.cepContext
+                    ctx["campaignId"] = campaign.id
+                    ctx["campaignKey"] = campaign.campaignKey
+                    return ctx
+                }()
             )
             if !surveyOrchestrator.start(payload: routed, config: cfg) {
                 logVerbose("survey campaign dropped: another survey is on screen: \(key)")
@@ -260,25 +263,36 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
 
     func reportSurveyCompleted(response: [String: JSONValue], answers: [String: SurveyAnswer] = [:])
     {
-        guard let state = surveyOrchestrator.state else { return }
-        if completedSurveyToken == state.token { return }
-        completedSurveyToken = state.token
-        // Internal completion event would record `response` here.
-        _ = response
-        if !answers.isEmpty,
-            let config = self.config,
-            let campaignId = state.payload.cepContext["campaignId"]
-        {
-            NSLog(
-                "[Digia] survey submission started: campaignId=\(campaignId), answers=\(answers.count)"
-            )
-            SurveySubmissionReporter(config: config).report(
-                campaignId: campaignId,
-                survey: state.config,
-                answers: answers,
-                startedAt: state.startedAt
-            )
+        guard let state = surveyOrchestrator.state else {
+            NSLog("[Digia] reportSurveyCompleted: skip — no active survey state")
+            return
         }
+        if completedSurveyToken == state.token {
+            NSLog("[Digia] reportSurveyCompleted: skip — already reported for token=\(state.token)")
+            return
+        }
+        completedSurveyToken = state.token
+        _ = response
+        NSLog("[Digia] reportSurveyCompleted: answers=\(answers.count) config=\(self.config != nil) cepContext=\(state.payload.cepContext)")
+        if answers.isEmpty {
+            NSLog("[Digia] reportSurveyCompleted: skip — answers is empty")
+            return
+        }
+        guard let config = self.config else {
+            NSLog("[Digia] reportSurveyCompleted: skip — SDK not initialized (config is nil)")
+            return
+        }
+        guard let campaignId = state.payload.cepContext["campaignId"] else {
+            NSLog("[Digia] reportSurveyCompleted: skip — campaignId missing from cepContext keys=\(state.payload.cepContext.keys.sorted())")
+            return
+        }
+        NSLog("[Digia] reportSurveyCompleted: submitting campaignId=\(campaignId) answers=\(answers.count)")
+        SurveySubmissionReporter(config: config).report(
+            campaignId: campaignId,
+            survey: state.config,
+            answers: answers,
+            startedAt: state.startedAt
+        )
     }
 
     func dismissCompletedSurvey() {
