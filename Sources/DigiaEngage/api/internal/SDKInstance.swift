@@ -82,27 +82,6 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         plugin.setup(delegate: self)
     }
 
-    func triggerCampaign(_ campaignId: String) {
-        guard sdkState == .ready else {
-            logVerbose("triggerCampaign(\(campaignId)) — sdkState=\(sdkState), not ready")
-            return
-        }
-        guard
-            let campaign = campaignStore.findById(campaignId) ?? campaignStore.findByKey(campaignId)
-        else {
-            logVerbose("triggerCampaign(\(campaignId)) — campaign not found in store")
-            return
-        }
-        // Build a campaign-key payload and route through the shared dispatch,
-        // resolving the full campaign + campaignType (mirrors Android).
-        let payload = InAppPayload(
-            id: campaign.campaignKey,
-            content: InAppPayloadContent(type: campaign.campaignType, campaignKey: campaign.campaignKey),
-            cepContext: ["campaignId": campaign.id, "campaignKey": campaign.campaignKey]
-        )
-        onCampaignTriggered(payload)
-    }
-
     func registerFontFactory(_ factory: DUIFontFactory) {
         fontFactory = factory
     }
@@ -144,7 +123,7 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         // key matches a known campaign, so inline/survey/nudge/guide campaigns
         // delivered without an explicit content.campaignKey still work.
         func argKey(_ key: String) -> String? {
-            if case let .string(value)? = payload.content.args[key] {
+            if case .string(let value)? = payload.content.args[key] {
                 let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
                 return trimmed.isEmpty ? nil : trimmed
             }
@@ -157,6 +136,8 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
             (explicitKey?.isEmpty == false ? explicitKey : nil)
             ?? argKey("campaign_key") ?? argKey("campaignKey")
             ?? (fallbackKey.isEmpty ? nil : fallbackKey)
+
+        NSLog("[Digia] onCampaignTriggered resolvedKey='%@'", resolvedKey ?? "nil")
         if let campaignKey = resolvedKey, campaignStore.find(campaignKey) != nil {
             routeByCampaignKey(campaignKey, payload: payload)
             return
@@ -277,7 +258,8 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         surveyOrchestrator.dismiss()
     }
 
-    func reportSurveyCompleted(response: [String: JSONValue], answers: [String: SurveyAnswer] = [:]) {
+    func reportSurveyCompleted(response: [String: JSONValue], answers: [String: SurveyAnswer] = [:])
+    {
         guard let state = surveyOrchestrator.state else { return }
         if completedSurveyToken == state.token { return }
         completedSurveyToken = state.token
@@ -287,7 +269,9 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
             let config = self.config,
             let campaignId = state.payload.cepContext["campaignId"]
         {
-            NSLog("[Digia] survey submission started: campaignId=\(campaignId), answers=\(answers.count)")
+            NSLog(
+                "[Digia] survey submission started: campaignId=\(campaignId), answers=\(answers.count)"
+            )
             SurveySubmissionReporter(config: config).report(
                 campaignId: campaignId,
                 survey: state.config,

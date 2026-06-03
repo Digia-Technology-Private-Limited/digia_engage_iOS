@@ -87,7 +87,11 @@ struct StyledText: View {
 
     var body: some View {
         Text(text)
-            .font(surveyFont(size: style.resolveFontSize(default: defaults.sizePt), weight: style.resolveWeight()))
+            .font(
+                surveyFont(
+                    size: style.resolveFontSize(default: defaults.sizePt),
+                    weight: style.resolveWeight())
+            )
             .foregroundColor(style.resolveColor(accent: accent, default: defaults.color))
             .multilineTextAlignment(style.resolveAlign())
             .frame(maxWidth: .infinity, alignment: alignment(for: style.resolveAlign()))
@@ -117,52 +121,72 @@ struct SurveyQuestionContent: View {
     private func resolved() -> AnyView {
         switch block.type {
         case .rating:
-            return AnyView(StarRatingQuestion(range: 5, accent: accent, answer: answer, onAnswer: onAnswer))
+            return AnyView(
+                StarRatingQuestion(range: 5, accent: accent, answer: answer, onAnswer: onAnswer))
         case .nps:
-            return AnyView(NpsQuestion(accent: accent, style: block.npsStyle, answer: answer, onAnswer: onAnswer))
+            return AnyView(
+                NpsQuestion(
+                    accent: accent, style: block.npsStyle, answer: answer, onAnswer: onAnswer))
         case .npsEmoji:
-            return AnyView(NpsFaceQuestion(accent: accent, style: block.npsStyle, faceSize: 28, answer: answer, onAnswer: onAnswer))
+            return AnyView(
+                NpsFaceQuestion(
+                    accent: accent, style: block.npsStyle, faceSize: 28, answer: answer,
+                    onAnswer: onAnswer))
         case .npsSmiley:
-            return AnyView(NpsFaceQuestion(accent: accent, style: block.npsStyle, faceSize: 30, answer: answer, onAnswer: onAnswer))
+            return AnyView(
+                NpsFaceQuestion(
+                    accent: accent, style: block.npsStyle, faceSize: 30, answer: answer,
+                    onAnswer: onAnswer))
         case .reaction:
-            return AnyView(ReactionQuestion(block: block, accent: accent, answer: answer, onAnswer: onAnswer))
+            return AnyView(
+                ReactionQuestion(block: block, accent: accent, answer: answer, onAnswer: onAnswer))
         case .thisOrThat:
-            return AnyView(ThisOrThatQuestion(block: block, accent: accent, answer: answer, onAnswer: onAnswer))
+            return AnyView(
+                ThisOrThatQuestion(block: block, accent: accent, answer: answer, onAnswer: onAnswer)
+            )
         case .tierList:
-            return AnyView(TierListQuestion(block: block, accent: accent, answer: answer, onAnswer: onAnswer))
+            return AnyView(
+                TierListQuestion(block: block, accent: accent, answer: answer, onAnswer: onAnswer))
         case .singleSelect, .multiSelect, .upvote:
-            return AnyView(ChoiceCardQuestion(block: block, accent: accent, answer: answer, onAnswer: onAnswer))
+            return AnyView(
+                ChoiceCardQuestion(block: block, accent: accent, answer: answer, onAnswer: onAnswer)
+            )
         case .shortText:
-            return AnyView(SurveyTextQuestion(
-                accent: accent, answer: answer, onAnswer: onAnswer,
-                keyboard: .default, singleLine: true, placeholder: "Type your answer…"
-            ))
+            return AnyView(
+                SurveyTextQuestion(
+                    accent: accent, answer: answer, onAnswer: onAnswer,
+                    keyboard: .default, singleLine: true, placeholder: "Type your answer…"
+                ))
         case .longText:
-            return AnyView(SurveyTextQuestion(
-                accent: accent, answer: answer, onAnswer: onAnswer,
-                keyboard: .default, singleLine: false, placeholder: "Type your answer…",
-                minHeightPt: 100
-            ))
+            return AnyView(
+                SurveyTextQuestion(
+                    accent: accent, answer: answer, onAnswer: onAnswer,
+                    keyboard: .default, singleLine: false, placeholder: "Type your answer…",
+                    minHeightPt: 100
+                ))
         case .number:
             let min = block.numberMin
             let max = block.numberMax
-            return AnyView(SurveyTextQuestion(
-                accent: accent, answer: answer, onAnswer: onAnswer,
-                keyboard: .decimalPad, singleLine: true, placeholder: "0", maxWidthPt: 200,
-                validator: { validateNumber($0, min: min, max: max) }
-            ))
+            return AnyView(
+                SurveyTextQuestion(
+                    accent: accent, answer: answer, onAnswer: onAnswer,
+                    keyboard: .decimalPad, singleLine: true, placeholder: "0", maxWidthPt: 200,
+                    validator: { validateNumber($0, min: min, max: max) }
+                ))
         case .email:
-            return AnyView(SurveyTextQuestion(
-                accent: accent, answer: answer, onAnswer: onAnswer,
-                keyboard: .emailAddress, singleLine: true, placeholder: "you@example.com",
-                validator: validateEmail
-            ))
+            return AnyView(
+                SurveyTextQuestion(
+                    accent: accent, answer: answer, onAnswer: onAnswer,
+                    keyboard: .emailAddress, singleLine: true, placeholder: "you@example.com",
+                    validator: validateEmail
+                ))
         case .date:
-            return AnyView(SurveyTextQuestion(
-                accent: accent, answer: answer, onAnswer: onAnswer,
-                keyboard: .numbersAndPunctuation, singleLine: true, placeholder: "YYYY-MM-DD",
-                maxWidthPt: 240, validator: validateDate
-            ))
+            return AnyView(
+                SurveyTextQuestion(
+                    accent: accent, answer: answer, onAnswer: onAnswer,
+                    keyboard: .numbersAndPunctuation, singleLine: true, placeholder: "YYYY-MM-DD",
+                    maxWidthPt: 240, validator: validateDate
+                ))
         case .welcome, .textMedia, .resultPage:
             return AnyView(EmptyView())
         }
@@ -275,9 +299,11 @@ private struct NpsQuestion: View {
                 }
             )
             HStack {
-                Text("Not likely").font(surveyFont(size: 11)).foregroundColor(SurveyTokens.textTertiary)
+                Text("Not likely").font(surveyFont(size: 11)).foregroundColor(
+                    SurveyTokens.textTertiary)
                 Spacer()
-                Text("Extremely likely").font(surveyFont(size: 11)).foregroundColor(SurveyTokens.textTertiary)
+                Text("Extremely likely").font(surveyFont(size: 11)).foregroundColor(
+                    SurveyTokens.textTertiary)
             }
         }
     }
@@ -304,7 +330,7 @@ private struct NpsFaceQuestion: View {
         let labelSize = style.textStyle.resolveFontSize(default: 13)
         let labelWeight = style.textStyle.resolveWeight()
         let selected = Int(answer?.values.first ?? "")
-        HStack(spacing: 10) {
+        HStack(alignment: .top, spacing: 10) {
             ForEach(Array(faces.enumerated()), id: \.offset) { index, face in
                 let value = index + 1
                 let isOn = selected == value
@@ -320,7 +346,10 @@ private struct NpsFaceQuestion: View {
                             .font(surveyFont(size: faceSize))
                             .frame(width: 56, height: 56)
                             .background(RoundedRectangle(cornerRadius: radius).fill(fill))
-                            .overlay(RoundedRectangle(cornerRadius: radius).stroke(borderColor, lineWidth: borderW))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: radius).stroke(
+                                    borderColor, lineWidth: borderW)
+                            )
                             .scaleEffect(isOn ? 1.1 : 1.0)
                         if style.showFaceLabels && !face.label.isEmpty {
                             Text(face.label)
@@ -359,7 +388,8 @@ private struct ReactionQuestion: View {
                             Circle().fill(isOn ? accent.opacity(0.14) : SurveyTokens.surfaceSunken)
                         )
                         .overlay(
-                            Circle().stroke(isOn ? accent : SurveyTokens.border, lineWidth: isOn ? 2 : 1.5)
+                            Circle().stroke(
+                                isOn ? accent : SurveyTokens.border, lineWidth: isOn ? 2 : 1.5)
                         )
                 }
                 .buttonStyle(.plain)
@@ -378,10 +408,14 @@ private struct ThisOrThatQuestion: View {
     let onAnswer: (SurveyAnswer) -> Void
 
     private let gradients: [LinearGradient] = [
-        LinearGradient(colors: [Color(red: 1, green: 0.6, blue: 0.4), Color(red: 1, green: 0.36, blue: 0.38)],
-                       startPoint: .topLeading, endPoint: .bottomTrailing),
-        LinearGradient(colors: [Color(red: 0.42, green: 0.42, blue: 1), Color(red: 0.29, green: 0.27, blue: 1)],
-                       startPoint: .topLeading, endPoint: .bottomTrailing),
+        LinearGradient(
+            colors: [Color(red: 1, green: 0.6, blue: 0.4), Color(red: 1, green: 0.36, blue: 0.38)],
+            startPoint: .topLeading, endPoint: .bottomTrailing),
+        LinearGradient(
+            colors: [
+                Color(red: 0.42, green: 0.42, blue: 1), Color(red: 0.29, green: 0.27, blue: 1),
+            ],
+            startPoint: .topLeading, endPoint: .bottomTrailing),
     ]
 
     var body: some View {
@@ -440,16 +474,18 @@ private struct TierListQuestion: View {
                         .foregroundColor(.white)
                         .frame(width: 40, height: 40)
                         .background(RoundedRectangle(cornerRadius: 6).fill(t.color))
-                    TierChips(items: block.options.filter { placements[$0.id] == t.label }, onTap: cycle)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .frame(minHeight: 44)
-                        .padding(6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6).fill(SurveyTokens.surfaceSunken)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6).stroke(SurveyTokens.border, lineWidth: 1)
-                        )
+                    TierChips(
+                        items: block.options.filter { placements[$0.id] == t.label }, onTap: cycle
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(minHeight: 44)
+                    .padding(6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6).fill(SurveyTokens.surfaceSunken)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6).stroke(SurveyTokens.border, lineWidth: 1)
+                    )
                 }
             }
             TierChips(
@@ -483,7 +519,8 @@ private struct TierListQuestion: View {
 
     private func emit() {
         let labels = Set(tiers.map { $0.label })
-        let list = placements
+        let list =
+            placements
             .filter { labels.contains($0.value) }
             .map { "\($0.value):\($0.key)" }
         onAnswer(SurveyAnswer(values: list))
@@ -517,7 +554,8 @@ private struct TierChips: View {
                                 RoundedRectangle(cornerRadius: 4).fill(SurveyTokens.surface)
                             )
                             .overlay(
-                                RoundedRectangle(cornerRadius: 4).stroke(SurveyTokens.border, lineWidth: 1)
+                                RoundedRectangle(cornerRadius: 4).stroke(
+                                    SurveyTokens.border, lineWidth: 1)
                             )
                     }
                     .buttonStyle(.plain)
@@ -542,7 +580,11 @@ private struct ChoiceCardQuestion: View {
     var body: some View {
         let multi = block.type.isMultiSelect
         let otherSelected = selected[OTHER_CHOICE_ID] == true
-        let options = block.options + (block.allowOther ? [SurveyOption(id: OTHER_CHOICE_ID, label: "Other…", description: nil, media: nil)] : [])
+        let options =
+            block.options
+            + (block.allowOther
+                ? [SurveyOption(id: OTHER_CHOICE_ID, label: "Other…", description: nil, media: nil)]
+                : [])
 
         VStack(alignment: .leading, spacing: 8) {
             let card: (SurveyOption) -> ChoiceCardRow = { option in
@@ -569,7 +611,9 @@ private struct ChoiceCardQuestion: View {
                 }
             case .grid:
                 LazyVGrid(
-                    columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)],
+                    columns: [
+                        GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8),
+                    ],
                     alignment: .leading,
                     spacing: 8
                 ) {
@@ -584,10 +628,12 @@ private struct ChoiceCardQuestion: View {
             if block.allowOther && otherSelected {
                 OutlinedTextField(
                     placeholder: "Please specify…",
-                    text: Binding(get: { otherText }, set: { v in
-                        otherText = v
-                        emit()
-                    }),
+                    text: Binding(
+                        get: { otherText },
+                        set: { v in
+                            otherText = v
+                            emit()
+                        }),
                     keyboard: .default,
                     singleLine: true,
                     minHeight: 0,
@@ -643,13 +689,17 @@ private struct ChoiceCardRow: View {
                                 .fill(selected ? accent : Color.clear)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 4)
-                                        .stroke(selected ? accent : SurveyTokens.borderStrong, lineWidth: 1.5)
+                                        .stroke(
+                                            selected ? accent : SurveyTokens.borderStrong,
+                                            lineWidth: 1.5)
                                 )
                         } else {
                             Circle()
                                 .fill(selected ? accent : Color.clear)
                                 .overlay(
-                                    Circle().stroke(selected ? accent : SurveyTokens.borderStrong, lineWidth: 1.5)
+                                    Circle().stroke(
+                                        selected ? accent : SurveyTokens.borderStrong,
+                                        lineWidth: 1.5)
                                 )
                         }
                     }
@@ -843,13 +893,14 @@ private func validateEmail(_ input: String) -> InputValidation {
 private func validateDate(_ input: String) -> InputValidation {
     let range = NSRange(input.startIndex..., in: input)
     guard let match = DATE_REGEX?.firstMatch(in: input, range: range),
-          match.numberOfRanges == 4,
-          let yr = Range(match.range(at: 1), in: input),
-          let mr = Range(match.range(at: 2), in: input),
-          let dr = Range(match.range(at: 3), in: input),
-          let year = Int(input[yr]),
-          let month = Int(input[mr]),
-          let day = Int(input[dr]) else {
+        match.numberOfRanges == 4,
+        let yr = Range(match.range(at: 1), in: input),
+        let mr = Range(match.range(at: 2), in: input),
+        let dr = Range(match.range(at: 3), in: input),
+        let year = Int(input[yr]),
+        let month = Int(input[mr]),
+        let day = Int(input[dr])
+    else {
         return InputValidation(error: "Use format YYYY-MM-DD")
     }
     if !(1...12).contains(month) { return InputValidation(error: "Month must be 01–12") }
@@ -893,7 +944,9 @@ struct FlowLayout: Layout {
         return CGSize(width: maxRowWidth.isFinite ? maxRowWidth : 0, height: totalHeight)
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    func placeSubviews(
+        in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()
+    ) {
         var x: CGFloat = bounds.minX
         var y: CGFloat = bounds.minY
         var rowHeight: CGFloat = 0
