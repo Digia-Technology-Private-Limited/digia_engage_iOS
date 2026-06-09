@@ -177,7 +177,7 @@ private struct InternalImageView: View {
         let explicitAspect = payload.eval(props.aspectRatio).map { CGFloat($0) }
         let cachedAspect = source.flatMap { Self.aspectRatioCache[$0] }
         let aspect = explicitAspect ?? intrinsicAspectRatio ?? cachedAspect
-        let contentMode: ContentMode = (fit == "cover") ? .fill : .fit
+        let contentMode: ContentMode = (fit == "cover" || fit == "fill") ? .fill : .fit
         let shouldClip = (fit == "cover" || fit == "fitwidth" || fit == "fitheight" || fit == "none" || fit == "fill")
 
         var current: AnyView = baseImage(source: source)

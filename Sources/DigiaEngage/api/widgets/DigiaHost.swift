@@ -4,6 +4,7 @@ import UIKit
 public struct DigiaHost<Content: View>: View {
     private let content: Content
     @ObservedObject private var controller = SDKInstance.shared.controller
+    @ObservedObject private var surveyOrchestrator = SDKInstance.shared.surveyOrchestrator
 
     public init(@ViewBuilder content: () -> Content) {
         self.content = content()
@@ -40,6 +41,9 @@ public struct DigiaHost<Content: View>: View {
             NudgeOverlayView()
                 .zIndex(5)
                 .animation(.easeInOut(duration: 0.25), value: controller.activeNudge)
+
+            SurveyRenderer(orchestrator: surveyOrchestrator)
+                .zIndex(4)
         }
         .onChange(of: controller.activePayload, initial: false) { _, payload in
             handlePayload(payload)
