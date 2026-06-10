@@ -17,67 +17,108 @@ private struct NudgeContainerView: View {
     let presentation: DigiaNudgePresentation
     @State private var dragOffset: CGFloat = 0
 
-    private var container: NudgeContainerConfig { presentation.config.container }
-    private var scrimColor: Color { Color(hex: container.scrimColor) ?? Color.black.opacity(0.4) }
-    private var backgroundColor: Color { Color(hex: container.bgColor) ?? .white }
+    private var surface: NudgeSurface { presentation.config.surface }
+    private var scrimColor: Color { surface.barrierColor ?? Color.black.opacity(0.4) }
+    private var backgroundColor: Color { surface.backgroundColor ?? .white }
 
     private func dismiss() { SDKInstance.shared.controller.dismissNudge() }
 
     var body: some View {
-        ZStack(alignment: presentation.config.templateType == .bottomSheet ? .bottom : .center) {
+        ZStack(alignment: surface.isBottomSheet ? .bottom : .center) {
             scrimColor
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
-                .onTapGesture { if container.dismissOnOutsideTap { dismiss() } }
+                .onTapGesture { if surface.backdropDismissible { dismiss() } }
 
-            switch presentation.config.templateType {
-            case .bottomSheet: sheetPanel
-            case .dialog: dialogPanel
+            if surface.isBottomSheet {
+                sheetPanel
+            } else {
+                dialogPanel
             }
         }
     }
 
     // MARK: - Panels
 
+    /// Mirrors Flutter's `_SheetFrame`: top-rounded surface, optional drag
+    /// handle, optional close button, drag-to-dismiss when `draggable`.
     private var sheetPanel: some View {
-        VStack(spacing: 0) {
-            if container.dragHandle {
-                // Drag-to-dismiss lives on the handle so it never competes with the
-                // content ScrollView's own vertical scrolling.
-                Capsule()
-                    .fill(Color.black.opacity(0.2))
-                    .frame(width: 40, height: 4)
-                    .padding(.vertical, 8)
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
-                    .gesture(dragGesture)
+        ZStack(alignment: .topTrailing) {
+            VStack(spacing: 0) {
+                if surface.showHandle {
+                    // Drag-to-dismiss lives on the handle so it never competes
+                    // with the content ScrollView's own vertical scrolling.
+                    dragHandle
+                        .contentShape(Rectangle())
+                        .gesture(dragGesture, including: surface.draggable ? .all : .none)
+                }
+                ScrollView { renderedContent }
+                    .padding(surface.padding)
             }
-            ScrollView {
-                renderedContent.padding(container.padding)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .frame(maxHeight: UIScreen.main.bounds.height * container.maxHeightRatio)
-        .background(backgroundColor)
-        .clipShape(
-            UnevenRoundedRectangle(
-                topLeadingRadius: container.cornerRadius,
-                topTrailingRadius: container.cornerRadius
+            .frame(maxWidth: .infinity)
+            .frame(maxHeight: UIScreen.main.bounds.height * 0.85)
+            .background(backgroundColor)
+            .clipShape(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: surface.cornerRadius,
+                    topTrailingRadius: surface.cornerRadius
+                )
             )
-        )
+
+            if surface.showCloseButton { closeButton }
+        }
         .offset(y: max(dragOffset, 0))
         .transition(.move(edge: .bottom))
     }
 
+    /// Mirrors Flutter's `_DialogFrame`: centred, width-constrained, fully
+    /// rounded surface that *sizes to its content* (unbounded height), with an
+    /// optional close button.
     private var dialogPanel: some View {
-        ScrollView {
-            renderedContent.padding(container.padding)
+        ZStack(alignment: .topTrailing) {
+            VStack(spacing: 0) { renderedContent }
+                .padding(surface.padding)
+                .frame(width: dialogWidth)
+                .background(backgroundColor)
+                .clipShape(RoundedRectangle(cornerRadius: surface.cornerRadius))
+
+            if surface.showCloseButton { closeButton }
         }
-        .frame(width: container.width ?? (UIScreen.main.bounds.width * 0.85))
-        .frame(maxHeight: UIScreen.main.bounds.height * 0.85)
-        .background(backgroundColor)
-        .clipShape(RoundedRectangle(cornerRadius: container.cornerRadius))
+        // Cap very tall dialogs to the screen; short content hugs naturally.
+        .frame(maxHeight: UIScreen.main.bounds.height * 0.9)
         .transition(.opacity)
+    }
+
+    /// Dialog width = screen × `widthFraction`, but always inset 24pt from each
+    /// screen edge (mirrors Flutter's `Dialog.insetPadding`), so a 100% width
+    /// still leaves a margin instead of bleeding to the edges.
+    private var dialogWidth: CGFloat {
+        let screen = UIScreen.main.bounds.width
+        return min(screen * surface.widthFraction, screen - 48)
+    }
+
+    // MARK: - Affordances
+
+    private var dragHandle: some View {
+        Capsule()
+            .fill(Color(hex: "#E0E0E6") ?? Color.black.opacity(0.2))
+            .frame(width: 36, height: 4)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+            .frame(maxWidth: .infinity)
+    }
+
+    private var closeButton: some View {
+        Button(action: dismiss) {
+            Image(systemName: "xmark")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color(hex: "#66667A") ?? .secondary)
+                .frame(width: 26, height: 26)
+                .background(Color.black.opacity(0.08))
+                .clipShape(Circle())
+        }
+        .padding(.top, 12)
+        .padding(.trailing, 12)
     }
 
     // MARK: - Drag-to-dismiss (bottom sheet)
@@ -96,7 +137,11 @@ private struct NudgeContainerView: View {
 
     // MARK: - Nudge content
 
+    /// The typed content column, rendered with the trigger variables in scope so
+    /// `{{ placeholder }}` copy interpolates (mirrors Flutter's
+    /// `VariableScopeProvider`).
     private var renderedContent: some View {
         NudgeColumnContent(column: presentation.config.layout, onDismiss: dismiss)
+            .environment(\.digiaVariables, presentation.variables)
     }
 }

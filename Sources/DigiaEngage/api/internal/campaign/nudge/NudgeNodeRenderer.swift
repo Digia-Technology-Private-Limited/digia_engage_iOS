@@ -57,9 +57,10 @@ private struct NudgeNodeView: View {
 
 private struct NudgeTextView: View {
     let node: NudgeText
+    @Environment(\.digiaVariables) private var variables
 
     var body: some View {
-        Text(node.text)
+        Text(interpolate(node.text, variables: variables))
             .font(SDKInstance.shared.fontFactory.getDefaultFont(
                 size: Double(node.fontSize), weight: node.fontWeight, italic: false
             ))
@@ -75,17 +76,20 @@ private struct NudgeTextView: View {
 
 private struct NudgeImageView: View {
     let node: NudgeImage
+    @Environment(\.digiaVariables) private var variables
+
+    private var url: String { interpolate(node.url, variables: variables) }
 
     var body: some View {
-        if node.url.isEmpty {
+        if url.isEmpty {
             nudgePlaceholder(label: "Image", height: node.box.fixedHeight ?? 120)
         } else if node.aspectRatio > 0 {
-            WebImage(url: URL(string: node.url))
+            WebImage(url: URL(string: url))
                 .resizable()
                 .aspectRatio(node.aspectRatio, contentMode: .fit)
                 .frame(maxWidth: node.box.fillWidth ? .infinity : nil)
         } else {
-            WebImage(url: URL(string: node.url))
+            WebImage(url: URL(string: url))
                 .resizable()
                 .scaledToFill()
                 .frame(
@@ -102,12 +106,13 @@ private struct NudgeImageView: View {
 private struct NudgeButtonView: View {
     let node: NudgeButton
     let onDismiss: () -> Void
+    @Environment(\.digiaVariables) private var variables
 
     private var filled: Bool { node.variant == .fill || node.variant == .elevated }
 
     var body: some View {
         Button(action: handleTap) {
-            Text(node.label)
+            Text(interpolate(node.label, variables: variables))
                 .font(SDKInstance.shared.fontFactory.getDefaultFont(
                     size: Double(node.fontSize), weight: node.fontWeight, italic: false
                 ))
@@ -166,11 +171,13 @@ private struct NudgeDividerView: View {
 
 private struct NudgeLottieView: View {
     let node: NudgeLottie
+    @Environment(\.digiaVariables) private var variables
 
     var body: some View {
-        if node.url.isEmpty {
+        let resolved = interpolate(node.url, variables: variables)
+        if resolved.isEmpty {
             nudgePlaceholder(label: "Lottie", height: node.height)
-        } else if let url = URL(string: node.url) {
+        } else if let url = URL(string: resolved) {
             LottieView {
                 try? await LottieAnimation.loadedFrom(url: url)
             }
@@ -185,49 +192,58 @@ private struct NudgeLottieView: View {
 
 private struct NudgeCarouselView: View {
     let node: NudgeCarousel
+    @Environment(\.digiaVariables) private var variables
     @State private var currentIndex = 0
     @State private var autoPlayTimer: Timer? = nil
 
-    private var pageCount: Int { node.loop ? 9999 : node.images.count }
+    private var images: [String] {
+        node.images.map { interpolate($0, variables: variables) }.filter { !$0.isEmpty }
+    }
+    private var pageCount: Int { node.loop ? 9999 : images.count }
 
     var body: some View {
-        VStack(spacing: 0) {
-            TabView(selection: $currentIndex) {
-                ForEach(0 ..< pageCount, id: \.self) { index in
-                    WebImage(url: URL(string: node.images[index % node.images.count]))
-                        .resizable()
-                        .scaledToFill()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: node.height)
-                        .clipped()
-                        .tag(index)
-                }
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: node.height)
-            .onAppear {
-                guard node.autoPlay, node.images.count > 1 else { return }
-                let interval = TimeInterval(node.autoPlayIntervalMs) / 1000
-                autoPlayTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
-                    withAnimation { currentIndex += 1 }
-                }
-            }
-            .onDisappear {
-                autoPlayTimer?.invalidate()
-                autoPlayTimer = nil
-            }
-
-            if node.showIndicator && node.images.count > 1 {
-                HStack(spacing: 6) {
-                    ForEach(0 ..< node.images.count, id: \.self) { i in
-                        let isActive = (currentIndex % node.images.count) == i
-                        Circle()
-                            .fill(isActive ? Color(hex: "#4945FF") ?? .blue
-                                           : Color(hex: "#CBD5E1") ?? .gray)
-                            .frame(width: isActive ? 8 : 6, height: isActive ? 8 : 6)
+        let images = self.images
+        if images.isEmpty {
+            nudgePlaceholder(label: "Image", height: node.height)
+        } else {
+            VStack(spacing: 0) {
+                TabView(selection: $currentIndex) {
+                    ForEach(0 ..< pageCount, id: \.self) { index in
+                        WebImage(url: URL(string: images[index % images.count]))
+                            .resizable()
+                            .scaledToFill()
+                            .frame(maxWidth: .infinity)
+                            .frame(height: node.height)
+                            .clipped()
+                            .tag(index)
                     }
                 }
-                .padding(.top, 8)
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .frame(height: node.height)
+                .onAppear {
+                    guard node.autoPlay, images.count > 1 else { return }
+                    let interval = TimeInterval(node.autoPlayIntervalMs) / 1000
+                    autoPlayTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
+                        withAnimation { currentIndex += 1 }
+                    }
+                }
+                .onDisappear {
+                    autoPlayTimer?.invalidate()
+                    autoPlayTimer = nil
+                }
+
+                if node.showIndicator && images.count > 1 {
+                    HStack(spacing: 6) {
+                        ForEach(0 ..< images.count, id: \.self) { i in
+                            let isActive = (currentIndex % images.count) == i
+                            Circle()
+                                .fill(isActive ? Color(hex: "#4945FF") ?? .blue
+                                               : Color(hex: "#CBD5E1") ?? .gray)
+                                .frame(width: isActive ? 8 : 6, height: isActive ? 8 : 6)
+                        }
+                    }
+                    .padding(.top, 8)
+                }
             }
         }
     }
@@ -237,11 +253,14 @@ private struct NudgeCarouselView: View {
 
 private struct NudgeVideoView: View {
     let node: NudgeVideo
+    @Environment(\.digiaVariables) private var variables
     @State private var player: AVPlayer? = nil
+
+    private var url: String { interpolate(node.url, variables: variables) }
 
     var body: some View {
         Group {
-            if node.url.isEmpty {
+            if url.isEmpty {
                 nudgePlaceholder(label: "Video", height: node.height)
             } else if let player {
                 VideoPlayer(player: player)
@@ -254,7 +273,7 @@ private struct NudgeVideoView: View {
             }
         }
         .onAppear {
-            guard !node.url.isEmpty, let url = URL(string: node.url) else { return }
+            guard !url.isEmpty, let url = URL(string: url) else { return }
             let p = AVPlayer(url: url)
             p.isMuted = node.muted
             if node.autoplay { p.play() }

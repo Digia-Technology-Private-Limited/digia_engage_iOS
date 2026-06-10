@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - Box decoration
 
-struct NudgeBox {
+struct NudgeBox: Equatable {
     var fillWidth: Bool = false
     var fixedWidth: CGFloat? = nil
     var fixedHeight: CGFloat? = nil
@@ -34,7 +34,7 @@ enum NudgeMainAxisAlignment  { case start, center, end, spaceBetween, spaceAroun
 
 // MARK: - Node hierarchy
 
-enum NudgeNode {
+enum NudgeNode: Equatable {
     case text(NudgeText)
     case image(NudgeImage)
     case button(NudgeButton)
@@ -58,7 +58,7 @@ enum NudgeNode {
     }
 }
 
-struct NudgeText {
+struct NudgeText: Equatable {
     let box: NudgeBox
     let text: String
     let fontSize: CGFloat
@@ -67,14 +67,14 @@ struct NudgeText {
     let textAlignment: TextAlignment
 }
 
-struct NudgeImage {
+struct NudgeImage: Equatable {
     let box: NudgeBox
     let url: String
     let aspectRatio: CGFloat
     let contentMode: ContentMode
 }
 
-struct NudgeButton {
+struct NudgeButton: Equatable {
     let box: NudgeBox
     let label: String
     let variant: NudgeButtonVariant
@@ -87,12 +87,12 @@ struct NudgeButton {
     let isPrimary: Bool
 }
 
-struct NudgeGap {
+struct NudgeGap: Equatable {
     let box: NudgeBox
     let height: CGFloat
 }
 
-struct NudgeDivider {
+struct NudgeDivider: Equatable {
     let box: NudgeBox
     let thickness: CGFloat
     let indent: CGFloat
@@ -100,7 +100,7 @@ struct NudgeDivider {
     let color: Color
 }
 
-struct NudgeLottie {
+struct NudgeLottie: Equatable {
     let box: NudgeBox
     let url: String
     let height: CGFloat
@@ -108,7 +108,7 @@ struct NudgeLottie {
     let autoplay: Bool
 }
 
-struct NudgeCarousel {
+struct NudgeCarousel: Equatable {
     let box: NudgeBox
     let images: [String]
     let height: CGFloat
@@ -118,7 +118,7 @@ struct NudgeCarousel {
     let showIndicator: Bool
 }
 
-struct NudgeVideo {
+struct NudgeVideo: Equatable {
     let box: NudgeBox
     let url: String
     let height: CGFloat
@@ -130,7 +130,7 @@ struct NudgeVideo {
 
 // MARK: - Root column
 
-struct NudgeColumn {
+struct NudgeColumn: Equatable {
     let crossAxisAlignment: NudgeCrossAxisAlignment
     let mainAxisAlignment: NudgeMainAxisAlignment
     let spacing: CGFloat

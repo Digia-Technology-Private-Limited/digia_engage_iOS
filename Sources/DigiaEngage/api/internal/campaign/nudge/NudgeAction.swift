@@ -1,6 +1,6 @@
 import Foundation
 
-enum NudgeAction {
+enum NudgeAction: Equatable {
     case openUrl(String)
     case openDeeplink(String)
     case dismiss
