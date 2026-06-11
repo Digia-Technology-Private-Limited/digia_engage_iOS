@@ -12,14 +12,29 @@ struct NudgeOverlayView: View {
     }
 }
 
+/// Carries the bottom sheet's natural content height up from a measuring
+/// `GeometryReader` so the sheet can size *to its content* (capped) instead of
+/// greedily filling the available height.
+private struct SheetContentHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 @MainActor
 private struct NudgeContainerView: View {
     let presentation: DigiaNudgePresentation
     @State private var dragOffset: CGFloat = 0
+    @State private var contentHeight: CGFloat = 0
 
     private var surface: NudgeSurface { presentation.config.surface }
     private var scrimColor: Color { surface.barrierColor ?? Color.black.opacity(0.4) }
     private var backgroundColor: Color { surface.backgroundColor ?? .white }
+
+    /// Hard cap on sheet height (mirrors Android's `maxHeightRatio`); tall
+    /// content scrolls within this, short content hugs its natural height.
+    private var maxSheetHeight: CGFloat { UIScreen.main.bounds.height * 0.85 }
 
     private func dismiss() { SDKInstance.shared.controller.dismissNudge() }
 
@@ -52,11 +67,26 @@ private struct NudgeContainerView: View {
                         .contentShape(Rectangle())
                         .gesture(dragGesture, including: surface.draggable ? .all : .none)
                 }
-                ScrollView { renderedContent }
-                    .padding(surface.padding)
+                // Padding lives *inside* the ScrollView (scrolls with content)
+                // and the scroll view is sized to the measured content height,
+                // capped — so a short nudge produces a short sheet instead of
+                // expanding to the cap. Mirrors Android's content-wrapping
+                // `Surface.heightIn(max =)` + scrollable column.
+                ScrollView {
+                    renderedContent
+                        .padding(surface.padding)
+                        .background(
+                            GeometryReader { proxy in
+                                Color.clear.preference(
+                                    key: SheetContentHeightKey.self,
+                                    value: proxy.size.height
+                                )
+                            }
+                        )
+                }
+                .frame(height: contentHeight > 0 ? min(contentHeight, maxSheetHeight) : maxSheetHeight)
             }
             .frame(maxWidth: .infinity)
-            .frame(maxHeight: UIScreen.main.bounds.height * 0.85)
             .background(backgroundColor)
             .clipShape(
                 UnevenRoundedRectangle(
@@ -67,6 +97,7 @@ private struct NudgeContainerView: View {
 
             if surface.showCloseButton { closeButton }
         }
+        .onPreferenceChange(SheetContentHeightKey.self) { contentHeight = $0 }
         .offset(y: max(dragOffset, 0))
         .transition(.move(edge: .bottom))
     }

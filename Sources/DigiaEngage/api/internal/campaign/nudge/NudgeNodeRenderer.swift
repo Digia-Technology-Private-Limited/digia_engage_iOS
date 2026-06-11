@@ -122,6 +122,7 @@ private struct NudgeButtonView: View {
                 .padding(.vertical, 12)
                 .frame(maxWidth: node.box.fillWidth ? .infinity : nil)
         }
+        .frame(maxWidth: node.box.fillWidth ? .infinity : nil)
         .background(filled ? node.background : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: node.radius))
         .shadow(radius: node.variant == .elevated ? 3 : 0)
@@ -179,7 +180,7 @@ private struct NudgeLottieView: View {
             nudgePlaceholder(label: "Lottie", height: node.height)
         } else if let url = URL(string: resolved) {
             LottieView {
-                try? await LottieAnimation.loadedFrom(url: url)
+                await LottieAnimation.loadedFrom(url: url)
             }
             .playing(loopMode: node.loop ? .loop : .playOnce)
             .frame(maxWidth: .infinity)
@@ -224,7 +225,9 @@ private struct NudgeCarouselView: View {
                     guard node.autoPlay, images.count > 1 else { return }
                     let interval = TimeInterval(node.autoPlayIntervalMs) / 1000
                     autoPlayTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
-                        withAnimation { currentIndex += 1 }
+                        DispatchQueue.main.async {
+                            withAnimation { currentIndex += 1 }
+                        }
                     }
                 }
                 .onDisappear {
