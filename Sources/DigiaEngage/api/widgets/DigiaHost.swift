@@ -22,7 +22,6 @@ public struct DigiaHost<Content: View>: View {
 
             NudgeOverlayView()
                 .zIndex(5)
-                .animation(.easeInOut(duration: 0.25), value: controller.activeNudge)
 
             SurveyRenderer(orchestrator: surveyOrchestrator)
                 .zIndex(4)
