@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(UIKit)
+import UIKit
+#endif
 
 final class AnalyticsIdentityManager {
     private let defaults: UserDefaults
@@ -58,7 +61,11 @@ final class AnalyticsIdentityManager {
         if let existing = defaults.string(forKey: key), !existing.isEmpty {
             return existing
         }
+        #if canImport(UIKit)
+        let id = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
+        #else
         let id = UUID().uuidString
+        #endif
         defaults.set(id, forKey: key)
         return id
     }
