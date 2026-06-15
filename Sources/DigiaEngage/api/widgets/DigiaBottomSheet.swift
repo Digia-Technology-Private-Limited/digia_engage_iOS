@@ -44,17 +44,13 @@ struct DigiaBottomSheet<Content: View>: View {
 
     @State private var contentHeight: CGFloat = 0
 
-    /// The native `.height` detent measures from the screen's bottom edge (behind
-    /// the home indicator), so a little clearance is added below the content. This
-    /// is intentionally small — adding the *full* safe-area inset (~34pt) leaves a
-    /// tall dead band under short content. Callers already pad their content, so
-    /// this only has to lift the last row clear of the indicator.
-    private let bottomClearance: CGFloat = 8
-
+    /// The detent hugs the content's natural height exactly (capped). No extra
+    /// clearance is added below — callers own their bottom padding, so the sheet
+    /// never leaves a dead band beneath the content.
     private var detents: Set<PresentationDetent> {
         let cap = UIScreen.main.bounds.height * config.heightCapFraction
         guard contentHeight > 0 else { return [.medium] }
-        return [.height(min(contentHeight + bottomClearance, cap))]
+        return [.height(min(contentHeight, cap))]
     }
 
     private var measuredContent: some View {

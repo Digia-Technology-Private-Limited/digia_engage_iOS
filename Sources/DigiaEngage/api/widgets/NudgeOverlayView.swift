@@ -59,10 +59,10 @@ private struct NudgeSheetView: View {
             )
         ) {
             renderedContent
-                // Top breathing room under the drag indicator; bottom room so
-                // content never butts against the home indicator.
-                .padding(.top, surface.showHandle ? 8 : surface.padding)
-                .padding(.bottom, surface.padding)
+                // Uniform surface padding on all sides (matches Flutter/Android):
+                // the content column — including full-width buttons — is inset
+                // equally left/right/top/bottom instead of bleeding to the edges.
+                .padding(surface.padding)
         }
         .overlay(alignment: .topTrailing) {
             if surface.showCloseButton { closeButton }
