@@ -44,16 +44,17 @@ struct DigiaBottomSheet<Content: View>: View {
 
     @State private var contentHeight: CGFloat = 0
 
-    /// The native `.height` detent measures from the bottom of the screen, so the
-    /// home-indicator inset has to be added for content to clear it.
-    private var bottomSafeInset: CGFloat {
-        ViewControllerUtil.keyWindow()?.safeAreaInsets.bottom ?? 0
-    }
+    /// The native `.height` detent measures from the screen's bottom edge (behind
+    /// the home indicator), so a little clearance is added below the content. This
+    /// is intentionally small — adding the *full* safe-area inset (~34pt) leaves a
+    /// tall dead band under short content. Callers already pad their content, so
+    /// this only has to lift the last row clear of the indicator.
+    private let bottomClearance: CGFloat = 8
 
     private var detents: Set<PresentationDetent> {
         let cap = UIScreen.main.bounds.height * config.heightCapFraction
         guard contentHeight > 0 else { return [.medium] }
-        return [.height(min(contentHeight + bottomSafeInset, cap))]
+        return [.height(min(contentHeight + bottomClearance, cap))]
     }
 
     private var measuredContent: some View {
