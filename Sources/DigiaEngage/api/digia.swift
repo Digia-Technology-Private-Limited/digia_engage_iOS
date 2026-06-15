@@ -31,4 +31,20 @@ public enum Digia {
             || ctrl.activeNudge != nil
             || SDKInstance.shared.surveyOrchestrator.state != nil
     }
+
+    /// Sets the authenticated user ID for analytics identity stitching.
+    public static func setUserId(_ userId: String) {
+        SDKInstance.shared.setUserId(userId)
+    }
+
+    /// Clears the authenticated user ID (e.g. on logout).
+    public static func clearUserId() {
+        SDKInstance.shared.clearUserId()
+    }
+
+    /// Records an analytics event for JS-rendered campaigns (guides / tooltips / spotlights).
+    /// Native campaigns (nudge, inline, survey) are tracked automatically by the SDK.
+    public static func captureAnalyticsEvent(_ event: DigiaExperienceEvent, payload: InAppPayload) {
+        SDKInstance.shared.captureAnalyticsEvent(event, payload: payload)
+    }
 }

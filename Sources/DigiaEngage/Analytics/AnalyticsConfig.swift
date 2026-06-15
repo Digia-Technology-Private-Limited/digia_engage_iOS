@@ -1,0 +1,29 @@
+import Foundation
+
+public struct AnalyticsConfig: Sendable, Equatable {
+    public let enabled: Bool
+    public let flushIntervalMs: Int
+    public let flushBatchSize: Int
+    public let maxBatchSize: Int
+    public let queueMaxEvents: Int
+    public let sessionTimeoutMs: Int
+    public let endpointUrl: String
+
+    public init(
+        enabled: Bool = true,
+        flushIntervalMs: Int = 5_000,
+        flushBatchSize: Int = 10,
+        maxBatchSize: Int = 100,
+        queueMaxEvents: Int = 5_000,
+        sessionTimeoutMs: Int = 30 * 60 * 1_000,
+        endpointUrl: String = "https://app.digia.tech/api/v1/engage/sdk/track"
+    ) {
+        self.enabled = enabled
+        self.flushIntervalMs = flushIntervalMs
+        self.flushBatchSize = flushBatchSize
+        self.maxBatchSize = maxBatchSize
+        self.queueMaxEvents = queueMaxEvents
+        self.sessionTimeoutMs = sessionTimeoutMs
+        self.endpointUrl = endpointUrl
+    }
+}
