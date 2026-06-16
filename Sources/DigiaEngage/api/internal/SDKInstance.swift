@@ -18,14 +18,17 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
     let surveyOrchestrator = SurveyOrchestrator()
 
     private var completedSurveyToken: Int64?
+    private var analyticsService: AnalyticsService?
 
     private init() {
         controller.onEvent = { [weak self] event, payload in
             self?.activePlugin?.notifyEvent(event, payload: payload)
+            self?.analyticsService?.capture(event, payload: payload)
         }
 
         inlineController.onEvent = { [weak self] event, payload in
             self?.activePlugin?.notifyEvent(event, payload: payload)
+            self?.analyticsService?.capture(event, payload: payload)
         }
     }
 
@@ -51,6 +54,7 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         }
 
         sdkState = .ready
+        analyticsService = AnalyticsService.create(config: config)
 
         if let plugin = activePlugin, !plugin.healthCheck().isHealthy {
             plugin.setup(delegate: self)
@@ -254,6 +258,7 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
     func reportSurveyStarted() {
         guard let state = surveyOrchestrator.state else { return }
         activePlugin?.notifyEvent(.impressed, payload: state.payload)
+        analyticsService?.capture(.impressed, payload: state.payload)
     }
 
     func reportSurveyAnswered(stepId: String, answer: [String: JSONValue]) {
@@ -307,6 +312,7 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
     func markSurveyDismissed() {
         guard let state = surveyOrchestrator.state else { return }
         activePlugin?.notifyEvent(.dismissed, payload: state.payload)
+        analyticsService?.capture(.dismissed, payload: state.payload)
         surveyOrchestrator.dismiss()
     }
 
@@ -319,9 +325,28 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         sdkState = .ready
     }
 
+    func setUserId(_ userId: String) {
+        analyticsService?.setUserId(userId)
+    }
+
+    func clearUserId() {
+        analyticsService?.clearUserId()
+    }
+
+    func captureAnalyticsEvent(_ event: DigiaExperienceEvent, payload: InAppPayload) {
+        guard let svc = analyticsService else {
+            print("[DigiaAnalytics] [SDKInstance] captureAnalyticsEvent: analyticsService is nil — analytics disabled or SDK not initialized")
+            return
+        }
+        print("[DigiaAnalytics] [SDKInstance] captureAnalyticsEvent → analyticsService.capture: event=\(event) campaignKey=\(payload.content.campaignKey ?? "nil")")
+        svc.capture(event, payload: payload)
+    }
+
     func resetForTesting() {
         activePlugin?.teardown()
         activePlugin = nil
+        analyticsService?.clear()
+        analyticsService = nil
         config = nil
         sdkState = .notInitialized
         isHostMounted = false

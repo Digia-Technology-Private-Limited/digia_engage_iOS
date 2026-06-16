@@ -47,6 +47,7 @@ public struct DigiaConfig: Sendable, Equatable {
     /// Resolved via `Font.custom` / `UIFont(name:)`, so it must match a font
     /// registered with the app (e.g. a bundled custom font's PostScript name).
     public let fontFamily: String?
+    public let analyticsConfig: AnalyticsConfig
 
     public init(
         apiKey: String,
@@ -54,7 +55,8 @@ public struct DigiaConfig: Sendable, Equatable {
         environment: DigiaEnvironment = .production,
         networkConfiguration: DigiaNetworkConfiguration? = nil,
         developerConfig: DigiaDeveloperConfig? = nil,
-        fontFamily: String? = nil
+        fontFamily: String? = nil,
+        analyticsConfig: AnalyticsConfig = AnalyticsConfig()
     ) {
         self.apiKey = apiKey
         self.logLevel = logLevel
@@ -62,5 +64,6 @@ public struct DigiaConfig: Sendable, Equatable {
         self.networkConfiguration = networkConfiguration
         self.developerConfig = developerConfig
         self.fontFamily = fontFamily
+        self.analyticsConfig = analyticsConfig
     }
 }
