@@ -107,6 +107,31 @@ final class AnalyticsService {
         )
     }
 
+    /// The single entry point for the analytics event matrix. Renderers assemble
+    /// the snake_case `properties` map at the call site (e.g. display_style,
+    /// item_index, time_to_action_ms) and name the event explicitly. Mirrors the
+    /// Android `AnalyticsService.capture(eventName:…)` / Flutter `capture`. Pass
+    /// `flush` for terminal events (Experience Dismissed / Completed).
+    func capture(
+        eventName: String,
+        payload: InAppPayload,
+        properties: [String: Any] = [:],
+        flush: Bool = false
+    ) {
+        guard config.enabled else { return }
+        let campaignKey = payload.content.campaignKey ?? argString(payload.content.args["campaign_key"])
+        let campaignId = argString(payload.content.args["campaign_id"]) ?? payload.id
+        let campaignType = payload.content.type.isEmpty ? nil : payload.content.type
+        enqueue(
+            eventName: eventName,
+            campaignId: campaignId,
+            campaignKey: campaignKey,
+            campaignType: campaignType,
+            extraProperties: properties
+        )
+        if flush { self.flush() }
+    }
+
     func setUserId(_ userId: String) {
         identity.setUserId(userId)
     }
