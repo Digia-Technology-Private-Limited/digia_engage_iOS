@@ -47,7 +47,7 @@ public struct DigiaSlot<Placeholder: View>: View {
     @ViewBuilder
     private func slotContent(for payload: CEPTriggerPayload) -> some View {
         if let carouselConfig = inlineController.getCarouselConfig(placementKey) {
-            InlineCarouselRenderer.makeView(carouselConfig)
+            InlineCarouselRenderer.makeView(carouselConfig, payload: payload)
         } else if let storyConfig = inlineController.getStoryConfig(placementKey) {
             DigiaInlineStoryView(config: storyConfig, payload: payload)
         } else {

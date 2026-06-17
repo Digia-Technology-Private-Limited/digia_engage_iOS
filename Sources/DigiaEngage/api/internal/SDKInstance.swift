@@ -18,9 +18,9 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
     let surveyOrchestrator = SurveyOrchestrator()
 
     private var completedSurveyToken: Int64?
-    /// Survey whose first-answer engagement signal has already fired (Clicked +
-    /// QuestionAnswered are emitted once per survey showing).
-    private var firstAnswerSurveyToken: Int64?
+    /// Survey whose start-engagement ("welcome_start") click has already fired
+    /// (once per showing).
+    private var welcomeStartToken: Int64?
     private var analyticsService: AnalyticsService?
 
     // Event system (mirrors Android): a fan-out emitter over two sinks — the
@@ -268,15 +268,68 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         )
     }
 
-    /// Fired the first time the user answers any question (engagement signal).
-    /// Emits a Digia-only Clicked + QuestionAnswered, once per survey showing.
+    /// The survey's start engagement — fired once per showing. When a welcome
+    /// screen is present this is its "Start" CTA tap; when there's no welcome
+    /// screen it is raised on the first continue (see `reportSurveyAnswered` /
+    /// `reportSurveyQuestionSkipped`).
+    func reportSurveyWelcomeStart() {
+        guard let state = surveyOrchestrator.state else { return }
+        if welcomeStartToken == state.token { return }
+        welcomeStartToken = state.token
+        events.toDigia(SurveyEvent.Clicked(elementId: "welcome_start"), payload: state.payload)
+    }
+
+    /// When no welcome screen exists, the first continue is the start engagement.
+    private func ensureWelcomeStartIfNoWelcome(_ state: ActiveSurveyState) {
+        if !state.config.hasWelcome { reportSurveyWelcomeStart() }
+    }
+
+    /// A survey question became visible. `itemIndex` is its 1-based shown position.
+    func reportSurveyQuestionViewed(nodeId: String, itemIndex: Int) {
+        guard let state = surveyOrchestrator.state else { return }
+        guard let block = state.config.blockForNode(nodeId) else { return }
+        if block.type.isContent { return }
+        events.toDigia(
+            SurveyEvent.QuestionViewed(
+                questionId: nodeId,
+                questionType: block.type.rawValue,
+                itemIndex: itemIndex,
+                itemTotal: state.config.questionCount,
+                blockId: block.id,
+                isRequired: block.required
+            ),
+            payload: state.payload
+        )
+    }
+
+    /// An eligible optional question was skipped (advanced without an answer).
+    func reportSurveyQuestionSkipped(nodeId: String, itemIndex: Int) {
+        guard let state = surveyOrchestrator.state else { return }
+        ensureWelcomeStartIfNoWelcome(state)
+        guard let block = state.config.blockForNode(nodeId) else { return }
+        events.toDigia(
+            SurveyEvent.QuestionSkipped(questionId: nodeId, itemIndex: itemIndex, blockId: block.id),
+            payload: state.payload
+        )
+    }
+
+    /// Fired each time the user answers a question (one event per answered question).
     func reportSurveyAnswered(stepId: String, answer: [String: JSONValue]) {
         guard let state = surveyOrchestrator.state else { return }
-        if firstAnswerSurveyToken == state.token { return }
-        firstAnswerSurveyToken = state.token
-        events.toDigia(SurveyEvent.Clicked(), payload: state.payload)
+        ensureWelcomeStartIfNoWelcome(state)
+        let block = state.config.blockForNode(stepId)
+        let values = Self.stringArray(answer["values"])
+        let comment = Self.stringValue(answer["comment"])
         events.toDigia(
-            SurveyEvent.QuestionAnswered(questionId: stepId, answer: Self.foundation(answer)),
+            SurveyEvent.QuestionAnswered(
+                questionId: stepId,
+                questionType: block?.type.rawValue,
+                answerValue: values.first,
+                answerText: comment ?? (values.isEmpty ? nil : values.joined(separator: ", ")),
+                blockId: block?.id,
+                answerOptions: values.count > 1 ? values : nil,
+                answer: Self.foundation(answer)
+            ),
             payload: state.payload
         )
     }
@@ -336,12 +389,14 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         markSurveyDismissed()
     }
 
-    func markSurveyDismissed() {
+    func markSurveyDismissed(abandonedAtItem: Int? = nil, answeredCount: Int? = nil) {
         guard let state = surveyOrchestrator.state else { return }
         events.toBoth(
             .dismissed,
             SurveyEvent.Dismissed(
+                abandonedAtItem: abandonedAtItem,
                 itemTotal: state.config.questionCount,
+                answeredCount: answeredCount,
                 dwellMs: dwellTracker.consumeDwellMs(state.payload.cepCampaignId)
             ),
             payload: state.payload
@@ -387,7 +442,7 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         ctaLabel: String? = nil,
         actionType: String? = nil,
         actionUrl: String? = nil,
-        ctaPosition: String? = nil
+        ctaRole: String? = nil
     ) {
         guard let payload = controller.activeNudge?.payload else { return }
         events.toDigia(
@@ -396,7 +451,7 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
                 ctaLabel: ctaLabel,
                 actionType: actionType,
                 actionUrl: actionUrl,
-                ctaPosition: ctaPosition,
+                ctaRole: ctaRole,
                 // ms since the nudge was viewed (peek — the nudge is still open).
                 timeToActionMs: dwellTracker.elapsedMs(payload.cepCampaignId)
             ),
@@ -434,53 +489,87 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         events.digiaImpressionOnce(payload: payload, event: viewed)
     }
 
-    /// Public analytics entry point (used by JS-rendered RN guides). The coarse
-    /// ``DigiaExperienceEvent`` carries no campaign-specific fields, so we resolve
-    /// the campaign from the store and build the matching campaign-typed event.
-    func captureAnalyticsEvent(_ event: DigiaExperienceEvent, payload: CEPTriggerPayload) {
-        guard let campaign = campaignStore.find(payload.campaignKey) else {
-            logVerbose("captureAnalyticsEvent: no campaign for key '\(payload.campaignKey)' — skipped")
-            return
-        }
-        guard let analyticsEvent = coarseToAnalyticsEvent(campaign: campaign, event: event) else {
-            logVerbose("captureAnalyticsEvent: no analytics mapping for \(event) type=\(campaign.campaignType) — skipped")
-            return
-        }
-        events.toDigia(analyticsEvent, payload: payload)
+    /// A carousel item scrolled into view. `auto` = autoplay advance vs manual swipe.
+    func reportCarouselStepViewed(payload: CEPTriggerPayload, itemIndex: Int, itemTotal: Int, auto: Bool) {
+        events.toDigia(
+            CarouselEvent.StepViewed(itemIndex: itemIndex, itemTotal: itemTotal, auto: auto),
+            payload: payload
+        )
     }
 
-    private func coarseToAnalyticsEvent(
-        campaign: CampaignModel,
-        event: DigiaExperienceEvent
-    ) -> EngageAnalyticsEvent? {
-        let elementId: String?
-        if case .clicked(let eid) = event { elementId = eid } else { elementId = nil }
+    /// A carousel item (or its CTA) was tapped.
+    func reportCarouselStepClicked(payload: CEPTriggerPayload, itemIndex: Int, actionUrl: String?) {
+        let actionType = actionUrl.map { _ in "deeplink" }
+        // The first item tap also counts as an experience-level engagement click (once).
+        events.digiaExperienceClickedOnce(
+            payload: payload,
+            event: CarouselEvent.Clicked(actionType: actionType, actionUrl: actionUrl)
+        )
+        events.toDigia(
+            CarouselEvent.StepClicked(itemIndex: itemIndex, actionType: actionType, actionUrl: actionUrl),
+            payload: payload
+        )
+    }
 
-        switch campaign.campaignType {
-        case "nudge":
-            let displayStyle = campaign.nudgeConfig?.surface.displayType.displayStyle ?? ""
-            switch event {
-            case .impressed: return NudgeEvent.Viewed(displayStyle: displayStyle)
-            case .clicked: return NudgeEvent.Clicked(elementId: elementId)
-            case .dismissed: return NudgeEvent.Dismissed()
-            }
-        case "guide":
-            let steps = campaign.guideConfig?.steps ?? []
-            switch event {
-            case .impressed:
-                return GuideEvent.Viewed(displayStyle: steps.first?.displayStyle ?? "", itemTotal: steps.count)
-            case .clicked:
-                let itemIndex = (guideOrchestrator.state?.stepIndex ?? 0) + 1
-                return GuideEvent.StepClicked(itemIndex: itemIndex, elementId: elementId)
-            case .dismissed:
-                return GuideEvent.Dismissed(itemTotal: steps.isEmpty ? nil : steps.count)
-            }
-        case "survey":
-            switch event {
-            case .impressed: return SurveyEvent.Viewed()
-            case .clicked: return SurveyEvent.Clicked(elementId: elementId)
-            case .dismissed: return SurveyEvent.Dismissed()
-            }
+    // MARK: - Guide lifecycle
+
+    func dismissGuide() {
+        guard let state = guideOrchestrator.state else { return }
+        let payload = state.payload
+        guideOrchestrator.dismiss()
+        events.toBoth(
+            .dismissed,
+            GuideEvent.Dismissed(
+                abandonedAtItem: state.stepIndex + 1,
+                itemTotal: state.campaign.guideConfig?.steps.count,
+                dwellMs: dwellTracker.consumeDwellMs(payload.cepCampaignId)
+            ),
+            payload: payload
+        )
+    }
+
+    /// Public analytics entry point for JS-rendered RN campaigns (guides). The JS
+    /// layer fires each lifecycle event by its Engage matrix `eventName` with
+    /// wire-keyed `props`; this maps it to the typed analytics event and records
+    /// it to Digia. CEP forwarding for JS-rendered campaigns is handled JS-side.
+    func captureAnalyticsEvent(campaignKey: String, eventName: String, props: [String: Any]) {
+        guard let event = guideEventFor(eventName: eventName, props: props) else {
+            logVerbose("captureAnalyticsEvent: unsupported event '\(eventName)' for key '\(campaignKey)' — skipped")
+            return
+        }
+        let campaign = campaignStore.find(campaignKey)
+        let payload = CEPTriggerPayload(cepCampaignId: campaign?.id ?? campaignKey, campaignKey: campaignKey)
+        events.toDigia(event, payload: payload)
+    }
+
+    private func guideEventFor(eventName: String, props: [String: Any]) -> EngageAnalyticsEvent? {
+        func str(_ key: String) -> String? { props[key] as? String }
+        func int(_ key: String) -> Int? { (props[key] as? NSNumber)?.intValue ?? (props[key] as? Int) }
+        switch eventName {
+        case "Digia Experience Viewed":
+            return GuideEvent.Viewed(displayStyle: str("display_style") ?? "", itemTotal: int("step_total") ?? 0)
+        case "Digia Step Viewed":
+            return GuideEvent.StepViewed(
+                itemIndex: int("step_index") ?? 0,
+                itemTotal: int("step_total") ?? 0,
+                anchorKey: str("anchor_key"),
+                displayStyle: str("display_style")
+            )
+        // Guides only have Step Clicked in the matrix; map both click variants to it.
+        case "Digia Step Clicked", "Digia Experience Clicked":
+            return GuideEvent.StepClicked(
+                itemIndex: int("step_index") ?? 0,
+                elementId: str("element_id"),
+                ctaLabel: str("cta_label"),
+                actionType: str("action_type"),
+                actionUrl: str("action_url")
+            )
+        case "Digia Step Dismissed":
+            return GuideEvent.StepDismissed(itemIndex: int("step_index") ?? 0)
+        case "Digia Experience Dismissed":
+            return GuideEvent.Dismissed(abandonedAtItem: int("abandoned_at_step") ?? int("step_index"), itemTotal: int("step_total"))
+        case "Digia Experience Completed":
+            return GuideEvent.Completed(itemTotal: int("step_total"))
         default:
             return nil
         }
@@ -494,6 +583,16 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
             if let any = value.anyValue { result[key] = any }
         }
         return result
+    }
+
+    private static func stringArray(_ value: JSONValue?) -> [String] {
+        guard case .array(let arr)? = value else { return [] }
+        return arr.compactMap { if case .string(let s) = $0 { return s } else { return nil } }
+    }
+
+    private static func stringValue(_ value: JSONValue?) -> String? {
+        if case .string(let s)? = value { return s }
+        return nil
     }
 
     func resetForTesting() {
@@ -515,7 +614,7 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         events.clearImpressions()
         dwellTracker.clear()
         completedSurveyToken = nil
-        firstAnswerSurveyToken = nil
+        welcomeStartToken = nil
     }
 
 }
@@ -537,4 +636,8 @@ private extension SurveyConfigModel {
     var hasThanks: Bool { blocks.contains { $0.type == .resultPage } }
 
     var hasBranching: Bool { nodes.contains { $0.branching.type != .linear } }
+
+    func blockForNode(_ nodeId: String) -> SurveyBlock? {
+        nodeById(nodeId).flatMap { blockFor($0) }
+    }
 }

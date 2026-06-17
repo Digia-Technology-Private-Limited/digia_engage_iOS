@@ -44,9 +44,9 @@ public enum Digia {
 
     /// Records an analytics event for JS-rendered campaigns (guides / tooltips / spotlights).
     /// Native campaigns (nudge, inline, survey) are tracked automatically by the SDK.
-    /// The campaign is resolved from the store by `payload.campaignKey` and the
-    /// coarse event is mapped onto the matching rich Digia analytics event.
-    public static func captureAnalyticsEvent(_ event: DigiaExperienceEvent, payload: CEPTriggerPayload) {
-        SDKInstance.shared.captureAnalyticsEvent(event, payload: payload)
+    /// The JS layer fires each lifecycle event by its Engage matrix `eventName` with
+    /// wire-keyed `props`; the SDK maps it to the matching rich Digia analytics event.
+    public static func captureAnalyticsEvent(campaignKey: String, eventName: String, props: [String: Any]) {
+        SDKInstance.shared.captureAnalyticsEvent(campaignKey: campaignKey, eventName: eventName, props: props)
     }
 }

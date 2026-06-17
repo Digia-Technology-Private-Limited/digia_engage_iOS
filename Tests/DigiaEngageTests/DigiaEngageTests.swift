@@ -323,7 +323,7 @@ private final class TestPlugin: DigiaCEPPlugin {
         deregisteredPlaceholderIDs.append(id)
     }
 
-    func notifyEvent(_ event: DigiaExperienceEvent, payload: InAppPayload) {}
+    func notifyEvent(_ event: DigiaExperienceEvent, payload: CEPTriggerPayload) {}
 
     func healthCheck() -> DiagnosticReport {
         DiagnosticReport(isHealthy: true)

@@ -17,6 +17,9 @@ final class EngageEventEmitter {
     /// `cepCampaignId`s that have already fired a Digia first-render impression.
     private var digiaImpressed: Set<String> = []
 
+    /// `cepCampaignId`s that have already fired a Digia first-engagement click.
+    private var digiaClicked: Set<String> = []
+
     init(cep: CepPluginSink, digia: DigiaAnalyticsSink) {
         self.cep = cep
         self.digia = digia
@@ -46,13 +49,23 @@ final class EngageEventEmitter {
         toDigia(event, payload: payload)
     }
 
-    /// Forgets the impression mark so a later re-trigger impresses afresh.
-    func resetImpression(_ cepCampaignId: String) {
-        digiaImpressed.remove(cepCampaignId)
+    /// Records `event` (an experience-level "Clicked") to Digia the first time the
+    /// user engages with this campaign, deduped by `cepCampaignId`. Used for inline
+    /// widgets where the first item tap is the campaign's engagement signal.
+    func digiaExperienceClickedOnce(payload: CEPTriggerPayload, event: EngageAnalyticsEvent) {
+        guard digiaClicked.insert(payload.cepCampaignId).inserted else { return }
+        toDigia(event, payload: payload)
     }
 
-    /// Forgets every impression mark.
+    /// Forgets the impression + first-click marks so a later re-trigger re-arms both.
+    func resetImpression(_ cepCampaignId: String) {
+        digiaImpressed.remove(cepCampaignId)
+        digiaClicked.remove(cepCampaignId)
+    }
+
+    /// Forgets every impression + first-click mark.
     func clearImpressions() {
         digiaImpressed.removeAll()
+        digiaClicked.removeAll()
     }
 }

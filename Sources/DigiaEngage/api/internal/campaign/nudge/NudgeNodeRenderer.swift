@@ -145,7 +145,7 @@ private struct NudgeButtonView: View {
                 ctaLabel: node.label,
                 actionType: Self.actionType(for: action),
                 actionUrl: Self.actionUrl(for: action),
-                ctaPosition: "primary"
+                ctaRole: "primary"
             )
         }
         for action in node.actions {

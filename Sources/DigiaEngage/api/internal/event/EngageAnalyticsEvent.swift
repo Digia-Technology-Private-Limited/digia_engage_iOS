@@ -71,7 +71,7 @@ enum NudgeEvent {
         var ctaLabel: String?
         var actionType: String?
         var actionUrl: String?
-        var ctaPosition: String?
+        var ctaRole: String?
         var timeToActionMs: Int64?
 
         var eventName: String { "Digia Experience Clicked" }
@@ -85,7 +85,7 @@ enum NudgeEvent {
         }
         var properties: [String: Any] {
             nonNull([
-                ("cta_position", ctaPosition),
+                ("cta_role", ctaRole),
                 ("time_to_action_ms", timeToActionMs),
             ])
         }
@@ -345,10 +345,12 @@ enum CarouselEvent {
         let itemIndex: Int
         var itemTotal: Int?
         var itemId: String?
+        /// True when the carousel auto-advanced to this item; false on a manual swipe.
+        var auto: Bool?
 
         var eventName: String { "Digia Step Viewed" }
         var columns: [String: Any] { nonNull([("item_index", itemIndex), ("item_total", itemTotal)]) }
-        var properties: [String: Any] { nonNull([("item_id", itemId)]) }
+        var properties: [String: Any] { nonNull([("item_id", itemId), ("auto", auto)]) }
     }
 
     struct StepClicked: EngageAnalyticsEvent {
@@ -469,12 +471,26 @@ enum StoriesEvent {
 // MARK: - Helpers
 
 /// Builds a wire map from named fields, dropping any whose value is nil.
+///
+/// Passing a typed optional (e.g. `Int?`) into an `Any?` slot yields a *nested*
+/// optional (`.some(.none)`) that a plain `if let` would not treat as nil, so we
+/// deep-unwrap each value first — the standard Swift workaround.
 func nonNull(_ pairs: [(String, Any?)]) -> [String: Any] {
     var result: [String: Any] = [:]
     for (key, value) in pairs {
-        if let value { result[key] = value }
+        if let unwrapped = deepUnwrap(value) { result[key] = unwrapped }
     }
     return result
+}
+
+/// Recursively unwraps nested optionals, returning nil for any `.none` at any
+/// depth and the underlying value otherwise.
+private func deepUnwrap(_ value: Any?) -> Any? {
+    guard let value else { return nil }
+    let mirror = Mirror(reflecting: value)
+    guard mirror.displayStyle == .optional else { return value }
+    guard let child = mirror.children.first else { return nil }
+    return deepUnwrap(child.value)
 }
 
 private extension Optional where Wrapped == TriggerContext {

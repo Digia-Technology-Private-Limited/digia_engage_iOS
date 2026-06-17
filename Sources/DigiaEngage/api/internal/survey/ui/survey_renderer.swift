@@ -101,7 +101,10 @@ private struct SurveySession: View {
         if completed {
             SDKInstance.shared.markSurveyCompleted(response: vm.responsePayload(), answers: vm.answers)
         } else {
-            SDKInstance.shared.markSurveyDismissed()
+            SDKInstance.shared.markSurveyDismissed(
+                abandonedAtItem: vm.currentItemIndex,
+                answeredCount: vm.answers.values.filter { $0.isAnswered }.count
+            )
         }
     }
 }
@@ -523,6 +526,8 @@ private struct SurveyBody: View {
                     if !block.type.isContent {
                         if let ans = vm.answers[node.id], ans.isAnswered {
                             SDKInstance.shared.reportSurveyAnswered(stepId: node.id, answer: ans.toMap())
+                        } else {
+                            SDKInstance.shared.reportSurveyQuestionSkipped(nodeId: node.id, itemIndex: vm.currentItemIndex)
                         }
                     }
                     reportCompletionIfResultIsNext()
@@ -538,7 +543,7 @@ private struct SurveyBody: View {
         switch block.type {
         case .welcome:
             Button {
-                SDKInstance.shared.reportSurveyAnswered(stepId: node.id, answer: [:])
+                SDKInstance.shared.reportSurveyWelcomeStart()
                 vm.advance()
             } label: {
                 Text(cta.startLabel)
@@ -574,6 +579,9 @@ private struct SurveyBody: View {
                 accent: accent,
                 onAnswer: { vm.setAnswer(node.id, $0) }
             )
+            .onAppear {
+                SDKInstance.shared.reportSurveyQuestionViewed(nodeId: node.id, itemIndex: vm.currentItemIndex)
+            }
         }
     }
 
