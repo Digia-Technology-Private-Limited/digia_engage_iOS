@@ -81,6 +81,8 @@ final class AnalyticsService {
         if queue.size > 0 {
             scheduleTimer()
         }
+
+        Task { await reportSession() }
     }
 
     // MARK: - Public
@@ -147,7 +149,7 @@ final class AnalyticsService {
             print("[DigiaAnalytics] create: analytics DISABLED in DigiaConfig — no events will be captured")
             return nil
         }
-        print("[DigiaAnalytics] create: analytics enabled, endpoint=\(ac.endpointUrl) batchSize=\(ac.flushBatchSize) interval=\(ac.flushIntervalMs)ms")
+        print("[DigiaAnalytics] create: analytics enabled, batchSize=\(ac.flushBatchSize) interval=\(ac.flushIntervalMs)ms")
         return AnalyticsService(
             config: ac,
             apiKey: config.apiKey,
@@ -155,6 +157,25 @@ final class AnalyticsService {
             queue: AnalyticsQueue(),
             staticContext: buildStaticContext()
         )
+    }
+
+    // MARK: - Session
+
+    private func reportSession() async {
+        var body: [String: Any] = [
+            "session_id": identity.sessionId,
+            "anonymous_id": identity.anonymousId,
+            "occurred_at": isoNow(),
+            "properties": staticContext,
+        ]
+        if let uid = identity.userId { body["user_id"] = uid }
+        guard let data = try? JSONSerialization.data(withJSONObject: body) else { return }
+        let status = try? await sender.post(
+            url: DigiaEndpoints.session,
+            body: data,
+            headers: ["Content-Type": "application/json", "X-Digia-Project-Id": apiKey]
+        )
+        print("[DigiaAnalytics] session reported: HTTP \(status ?? -1) sessionId=\(identity.sessionId) anonymousId=\(identity.anonymousId)")
     }
 
     // MARK: - Private
@@ -217,13 +238,13 @@ final class AnalyticsService {
             return
         }
 
-        print("[DigiaAnalytics] dispatchPending: sending batch of \(batch.count) event(s) to \(config.endpointUrl)")
+        print("[DigiaAnalytics] dispatchPending: sending batch of \(batch.count) event(s) to \(DigiaEndpoints.track)")
         queue.incrementAttempt(eventIds: batch.map { $0.eventId })
 
         do {
             let body = try JSONSerialization.data(withJSONObject: ["events": batch.map { $0.payload }])
             let statusCode = try await sender.post(
-                url: config.endpointUrl,
+                url: DigiaEndpoints.track,
                 body: body,
                 headers: [
                     "Content-Type": "application/json",

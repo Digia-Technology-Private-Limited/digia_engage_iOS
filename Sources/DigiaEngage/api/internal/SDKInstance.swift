@@ -35,6 +35,7 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
     func initialize(_ config: DigiaConfig) async throws {
         guard self.config == nil else { return }
         self.config = config
+        DigiaEndpoints.configure(config)
 
         if let family = config.fontFamily?.trimmingCharacters(in: .whitespacesAndNewlines),
             !family.isEmpty
