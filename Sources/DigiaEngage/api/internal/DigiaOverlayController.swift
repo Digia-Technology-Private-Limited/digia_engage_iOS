@@ -15,6 +15,11 @@ final class DigiaOverlayController: ObservableObject {
     @Published private(set) var activeNudge: DigiaNudgePresentation?
     @Published private(set) var activeStoryOverlay: InlineStoryOverlayState?
 
+    /// Lets a renderer forward a CTA action (actionType, url) to the active CEP
+    /// plugin. Returns `true` if the plugin handled it (so the renderer skips its
+    /// native fallback). Wired by ``SDKInstance`` to the active plugin.
+    var onAction: ((_ actionType: String, _ url: String, _ payload: CEPTriggerPayload) -> Bool)?
+
     func show(_ payload: InAppPayload) {
         activePayload = payload
     }
@@ -44,7 +49,8 @@ final class DigiaOverlayController: ObservableObject {
         activeNudge = nil
     }
 
-    func showStoryOverlay(config: InlineStoryConfig, initialIndex: Int, payload: CEPTriggerPayload) {
+    func showStoryOverlay(config: InlineStoryConfig, initialIndex: Int, payload: CEPTriggerPayload)
+    {
         let state = InlineStoryOverlayState(
             config: config,
             initialIndex: initialIndex,

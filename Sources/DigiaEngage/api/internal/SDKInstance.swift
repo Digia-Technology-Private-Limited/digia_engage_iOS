@@ -39,6 +39,11 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
                 getCampaign: { [weak self] key in self?.campaignStore.find(key) }
             )
         )
+        // Forward overlay CTA actions to the active CEP plugin (native open is the
+        // renderer's fallback when no plugin handles it). Mirrors Android's wiring.
+        controller.onAction = { [weak self] actionType, url, payload in
+            self?.activePlugin?.notifyAction(actionType: actionType, url: url, payload: payload) ?? false
+        }
     }
 
     func initialize(_ config: DigiaConfig) async throws {
@@ -105,8 +110,8 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
     func onCampaignTriggered(_ payload: InAppPayload) {
         logVerbose(
             "onCampaignTriggered id='\(payload.id)' type='\(payload.content.type)' "
-            + "campaignKey='\(payload.content.campaignKey ?? "nil")' "
-            + "placementKey='\(payload.content.placementKey ?? "nil")'")
+                + "campaignKey='\(payload.content.campaignKey ?? "nil")' "
+                + "placementKey='\(payload.content.placementKey ?? "nil")'")
         // campaign_key path (native CEP plugins, e.g. CleverTap): resolve the full
         // campaign from the store and route by campaignType, mirroring Android.
         // The key may arrive either in content.campaignKey or — as the RN bridge
@@ -181,7 +186,8 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         )
         switch campaign.config {
         case .inline(let cfg):
-            logVerbose("routeByCampaignKey INLINE slotKey='\(cfg.slotKey)' items=\(cfg.items.count)")
+            logVerbose(
+                "routeByCampaignKey INLINE slotKey='\(cfg.slotKey)' items=\(cfg.items.count)")
             inlineController.setCarouselConfig(cfg.slotKey, config: cfg)
             inlineController.setCampaign(cfg.slotKey, payload: trigger)
             // syncTemplate semantics: CEP considers an inline slot shown and done
@@ -204,11 +210,12 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
             for (key, value) in payload.content.variables ?? [:] {
                 mergedVariables[key] = value
             }
-            controller.showNudge(DigiaNudgePresentation(
-                config: nudgeConfig,
-                payload: trigger,
-                variables: mergedVariables.isEmpty ? nil : mergedVariables
-            ))
+            controller.showNudge(
+                DigiaNudgePresentation(
+                    config: nudgeConfig,
+                    payload: trigger,
+                    variables: mergedVariables.isEmpty ? nil : mergedVariables
+                ))
         case .survey(let cfg):
             // campaignId is read back in reportSurveyCompleted; carry it through
             // cepMetadata so submission attribution survives.
@@ -308,7 +315,8 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         ensureWelcomeStartIfNoWelcome(state)
         guard let block = state.config.blockForNode(nodeId) else { return }
         events.toDigia(
-            SurveyEvent.QuestionSkipped(questionId: nodeId, itemIndex: itemIndex, blockId: block.id),
+            SurveyEvent.QuestionSkipped(
+                questionId: nodeId, itemIndex: itemIndex, blockId: block.id),
             payload: state.payload
         )
     }
@@ -369,14 +377,17 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
             return
         }
         guard let config = self.config else {
-            logVerbose("reportSurveyCompleted: skip submission — SDK not initialized (config is nil)")
+            logVerbose(
+                "reportSurveyCompleted: skip submission — SDK not initialized (config is nil)")
             return
         }
         guard let campaignId = state.payload.cepMetadata["campaignId"] else {
-            logVerbose("reportSurveyCompleted: skip submission — campaignId missing from cepMetadata")
+            logVerbose(
+                "reportSurveyCompleted: skip submission — campaignId missing from cepMetadata")
             return
         }
-        logVerbose("reportSurveyCompleted: submitting campaignId=\(campaignId) answers=\(answers.count)")
+        logVerbose(
+            "reportSurveyCompleted: submitting campaignId=\(campaignId) answers=\(answers.count)")
         SurveySubmissionReporter(config: config).report(
             campaignId: campaignId,
             survey: state.config,
@@ -490,7 +501,9 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
     }
 
     /// A carousel item scrolled into view. `auto` = autoplay advance vs manual swipe.
-    func reportCarouselStepViewed(payload: CEPTriggerPayload, itemIndex: Int, itemTotal: Int, auto: Bool) {
+    func reportCarouselStepViewed(
+        payload: CEPTriggerPayload, itemIndex: Int, itemTotal: Int, auto: Bool
+    ) {
         events.toDigia(
             CarouselEvent.StepViewed(itemIndex: itemIndex, itemTotal: itemTotal, auto: auto),
             payload: payload
@@ -506,7 +519,8 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
             event: CarouselEvent.Clicked(actionType: actionType, actionUrl: actionUrl)
         )
         events.toDigia(
-            CarouselEvent.StepClicked(itemIndex: itemIndex, actionType: actionType, actionUrl: actionUrl),
+            CarouselEvent.StepClicked(
+                itemIndex: itemIndex, actionType: actionType, actionUrl: actionUrl),
             payload: payload
         )
     }
@@ -534,20 +548,26 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
     /// it to Digia. CEP forwarding for JS-rendered campaigns is handled JS-side.
     func captureAnalyticsEvent(campaignKey: String, eventName: String, props: [String: Any]) {
         guard let event = guideEventFor(eventName: eventName, props: props) else {
-            logVerbose("captureAnalyticsEvent: unsupported event '\(eventName)' for key '\(campaignKey)' — skipped")
+            logVerbose(
+                "captureAnalyticsEvent: unsupported event '\(eventName)' for key '\(campaignKey)' — skipped"
+            )
             return
         }
         let campaign = campaignStore.find(campaignKey)
-        let payload = CEPTriggerPayload(cepCampaignId: campaign?.id ?? campaignKey, campaignKey: campaignKey)
+        let payload = CEPTriggerPayload(
+            cepCampaignId: campaign?.id ?? campaignKey, campaignKey: campaignKey)
         events.toDigia(event, payload: payload)
     }
 
     private func guideEventFor(eventName: String, props: [String: Any]) -> EngageAnalyticsEvent? {
         func str(_ key: String) -> String? { props[key] as? String }
-        func int(_ key: String) -> Int? { (props[key] as? NSNumber)?.intValue ?? (props[key] as? Int) }
+        func int(_ key: String) -> Int? {
+            (props[key] as? NSNumber)?.intValue ?? (props[key] as? Int)
+        }
         switch eventName {
         case "Digia Experience Viewed":
-            return GuideEvent.Viewed(displayStyle: str("display_style") ?? "", itemTotal: int("step_total") ?? 0)
+            return GuideEvent.Viewed(
+                displayStyle: str("display_style") ?? "", itemTotal: int("step_total") ?? 0)
         case "Digia Step Viewed":
             return GuideEvent.StepViewed(
                 itemIndex: int("step_index") ?? 0,
@@ -567,7 +587,9 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
         case "Digia Step Dismissed":
             return GuideEvent.StepDismissed(itemIndex: int("step_index") ?? 0)
         case "Digia Experience Dismissed":
-            return GuideEvent.Dismissed(abandonedAtItem: int("abandoned_at_step") ?? int("step_index"), itemTotal: int("step_total"))
+            return GuideEvent.Dismissed(
+                abandonedAtItem: int("abandoned_at_step") ?? int("step_index"),
+                itemTotal: int("step_total"))
         case "Digia Experience Completed":
             return GuideEvent.Completed(itemTotal: int("step_total"))
         default:
@@ -621,23 +643,23 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
 
 // MARK: - Survey config metrics (Engage matrix props)
 
-private extension SurveyConfigModel {
+extension SurveyConfigModel {
     /// Configured questions = graph nodes whose block is an actual prompt (not
     /// content chrome like welcome / text-media / result pages).
-    var questionCount: Int {
+    fileprivate var questionCount: Int {
         nodes.filter { node in
             guard let block = blockFor(node) else { return false }
             return !block.type.isContent
         }.count
     }
 
-    var hasWelcome: Bool { welcomeBlock() != nil }
+    fileprivate var hasWelcome: Bool { welcomeBlock() != nil }
 
-    var hasThanks: Bool { blocks.contains { $0.type == .resultPage } }
+    fileprivate var hasThanks: Bool { blocks.contains { $0.type == .resultPage } }
 
-    var hasBranching: Bool { nodes.contains { $0.branching.type != .linear } }
+    fileprivate var hasBranching: Bool { nodes.contains { $0.branching.type != .linear } }
 
-    func blockForNode(_ nodeId: String) -> SurveyBlock? {
+    fileprivate func blockForNode(_ nodeId: String) -> SurveyBlock? {
         nodeById(nodeId).flatMap { blockFor($0) }
     }
 }

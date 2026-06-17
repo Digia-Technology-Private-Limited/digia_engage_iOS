@@ -153,7 +153,13 @@ private struct NudgeButtonView: View {
             case .dismiss:
                 onDismiss()
             case .openUrl(let url), .openDeeplink(let url):
-                if let u = URL(string: url) {
+                // Consult the CEP plugin first; only fall back to a native open
+                // when no plugin handled the action (mirrors Android).
+                let payload = SDKInstance.shared.controller.activeNudge?.payload
+                let handled = payload.flatMap {
+                    SDKInstance.shared.controller.onAction?("deep_link", url, $0)
+                } ?? false
+                if !handled, let u = URL(string: url) {
                     UIApplication.shared.open(u)
                 }
             case .copyToClipboard(let text):
