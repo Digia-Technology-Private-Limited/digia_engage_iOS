@@ -53,6 +53,10 @@ targets:
         PRODUCT_NAME: DigiaEngage
         PRODUCT_BUNDLE_IDENTIFIER: tech.digia.DigiaEngage
         DEFINES_MODULE: YES
+        # Auto-generate Info.plist from build settings — required for Xcode to
+        # embed the framework into a host app without the "did not contain an
+        # Info.plist" error.
+        GENERATE_INFOPLIST_FILE: YES
         # Dynamic framework (its own dylib, isolated from the host binary).
         MACH_O_TYPE: mh_dylib
         SKIP_INSTALL: NO
