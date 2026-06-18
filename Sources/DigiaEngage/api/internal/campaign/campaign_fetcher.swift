@@ -10,8 +10,7 @@ struct CampaignFetcher {
     }
 
     func fetch() async throws -> [CampaignModel] {
-        let base = DigiaEndpoints.base(config: config)
-        let fullURL = "\(base)/api/v1/engage/sdk/getCampaigns"
+        let fullURL = DigiaEndpoints.campaigns
 
         log("[CampaignFetcher] fetching: \(fullURL) (env=\(config.environment))")
         guard let url = URL(string: fullURL) else {

@@ -23,16 +23,18 @@ struct NudgeOverlayView: View {
 
     /// Drives the native sheet from the controller's active nudge, but only for
     /// bottom-sheet nudges. Clearing it (swipe-down or programmatic) routes
-    /// through `dismissNudge()` so the dismissal event still fires.
+    /// through `markNudgeDismissed()` so the Dismissed event fires and the dwell
+    /// timer is consumed (symmetric with the impression on appear).
     private var sheetBinding: Binding<DigiaNudgePresentation?> {
         Binding(
             get: {
                 guard let nudge = controller.activeNudge,
-                      nudge.config.surface.isBottomSheet else { return nil }
+                    nudge.config.surface.isBottomSheet
+                else { return nil }
                 return nudge
             },
             set: { newValue in
-                if newValue == nil { controller.dismissNudge() }
+                if newValue == nil { SDKInstance.shared.markNudgeDismissed() }
             }
         )
     }
@@ -46,7 +48,7 @@ private struct NudgeSheetView: View {
 
     private var surface: NudgeSurface { presentation.config.surface }
 
-    private func dismiss() { SDKInstance.shared.controller.dismissNudge() }
+    private func dismiss() { SDKInstance.shared.markNudgeDismissed() }
 
     var body: some View {
         DigiaBottomSheet(
@@ -68,6 +70,9 @@ private struct NudgeSheetView: View {
         .overlay(alignment: .topTrailing) {
             if surface.showCloseButton { closeButton }
         }
+        // The native sheet presents this content once per nudge, so `onAppear`
+        // is the impression signal (Impressed → CEP + Digia "Viewed").
+        .onAppear { SDKInstance.shared.reportNudgeImpression() }
     }
 
     private var closeButton: some View {
@@ -102,7 +107,7 @@ private struct NudgeDialogContainer: View {
     private var scrimColor: Color { surface.barrierColor ?? Color.black.opacity(0.4) }
     private var backgroundColor: Color { surface.backgroundColor ?? .white }
 
-    private func dismiss() { SDKInstance.shared.controller.dismissNudge() }
+    private func dismiss() { SDKInstance.shared.markNudgeDismissed() }
 
     var body: some View {
         ZStack {
@@ -113,6 +118,9 @@ private struct NudgeDialogContainer: View {
 
             dialogPanel
         }
+        // Fires once per presentation: the `.id(nudge.id)` on the container gives
+        // each nudge a fresh view identity, so `onAppear` runs once.
+        .onAppear { SDKInstance.shared.reportNudgeImpression() }
     }
 
     /// Mirrors Flutter's `_DialogFrame`: centred, width-constrained, fully

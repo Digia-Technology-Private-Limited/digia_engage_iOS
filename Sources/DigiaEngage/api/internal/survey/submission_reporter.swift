@@ -27,7 +27,7 @@ struct SurveySubmissionReporter {
     // MARK: - Networking
 
     private static func post(config: DigiaConfig, deviceId: String, body: [String: Any]) async {
-        guard let url = endpoint(config: config) else { return }
+        guard let url = endpoint() else { return }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -45,9 +45,8 @@ struct SurveySubmissionReporter {
         }
     }
 
-    private static func endpoint(config: DigiaConfig) -> URL? {
-        let base = DigiaEndpoints.base(config: config)
-        return URL(string: base + "/api/v1/engage/sdk/recordSubmission")
+    private static func endpoint() -> URL? {
+        URL(string: DigiaEndpoints.submission)
     }
 
     private static func deviceId() -> String {
