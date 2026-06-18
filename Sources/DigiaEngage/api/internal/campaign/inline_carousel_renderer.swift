@@ -1,6 +1,6 @@
 import SwiftUI
 import UIKit
-import SDWebImageSwiftUI
+@_implementationOnly import SDWebImageSwiftUI
 
 @MainActor
 enum InlineCarouselRenderer {
