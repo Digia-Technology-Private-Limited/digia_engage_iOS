@@ -59,10 +59,7 @@ private struct NudgeSheetView: View {
             )
         ) {
             renderedContent
-                // Uniform surface padding on all sides (matches Flutter/Android):
-                // the content column — including full-width buttons — is inset
-                // equally left/right/top/bottom instead of bleeding to the edges.
-                .padding(surface.padding)
+                .padding(.top, surface.padding)
         }
         .overlay(alignment: .topTrailing) {
             if surface.showCloseButton { closeButton }
