@@ -38,6 +38,19 @@ ARCHIVES="$FATDIR/.archives"
 OUT="$ROOT/dist"
 SCHEME="DigiaEngage"
 
+# Version stamped into the framework's Info.plist. App Store validation (altool)
+# rejects any embedded framework whose Info.plist lacks CFBundleShortVersionString,
+# so this MUST be present. DigiaEngage.podspec's s.version is the single source of
+# truth — parse it here so the binary and the pod can never drift.
+# Override per-build with:  DIGIA_VERSION=3.1.0 BUILD_NUMBER=42 Scripts/build-fat-xcframework.sh
+PODSPEC="$ROOT/DigiaEngage.podspec"
+PODSPEC_VERSION="$(grep -E "^[[:space:]]*s\.version[[:space:]]*=" "$PODSPEC" \
+  | head -1 | sed -E "s/.*=[[:space:]]*['\"]([^'\"]+)['\"].*/\1/")"
+VERSION="${DIGIA_VERSION:-$PODSPEC_VERSION}"
+BUILD_NUMBER="${BUILD_NUMBER:-1}"
+[ -n "$VERSION" ] || { echo "ERROR: could not read s.version from $PODSPEC"; exit 1; }
+echo "==> Building DigiaEngage $VERSION (build $BUILD_NUMBER)"
+
 echo "==> Cleaning previous fat build"
 rm -rf "$PROJECT" "$DERIVED" "$ARCHIVES" "$OUT"
 mkdir -p "$ARCHIVES" "$OUT"
@@ -56,6 +69,11 @@ COMMON=(
   SKIP_INSTALL=NO
   BUILD_LIBRARY_FOR_DISTRIBUTION=YES
   CODE_SIGNING_ALLOWED=NO
+  # GENERATE_INFOPLIST_FILE sources these into CFBundleShortVersionString /
+  # CFBundleVersion. Without MARKETING_VERSION the short-version key is omitted
+  # entirely and App Store upload fails (altool 409).
+  MARKETING_VERSION="$VERSION"
+  CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
 )
 
 # --- 2. archive device + simulator -----------------------------------------
@@ -74,6 +92,23 @@ SIM_FW="$ARCHIVES/sim.xcarchive/Products/Library/Frameworks/DigiaEngage.framewor
 
 for fw in "$DEVICE_FW" "$SIM_FW"; do
   [ -d "$fw" ] || { echo "ERROR: missing framework at $fw"; exit 1; }
+done
+
+# --- 2a. guarantee App Store-required version keys --------------------------
+# altool rejects embedded frameworks whose Info.plist lacks CFBundleShortVersionString.
+# Primary mechanism is MARKETING_VERSION above; this is a belt-and-suspenders guard:
+# inject the keys if absent, then HARD-FAIL if the short-version key still isn't
+# there — so the build breaks here instead of silently failing the client's upload.
+echo "==> Verifying CFBundleShortVersionString in framework Info.plist"
+for fw in "$DEVICE_FW" "$SIM_FW"; do
+  plist="$fw/Info.plist"
+  /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$plist" >/dev/null 2>&1 \
+    || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" "$plist"
+  /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$plist" >/dev/null 2>&1 \
+    || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $BUILD_NUMBER" "$plist"
+  short="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$plist" 2>/dev/null || true)"
+  [ -n "$short" ] || { echo "ERROR: CFBundleShortVersionString still missing in $plist"; exit 1; }
+  echo "    $fw  ->  CFBundleShortVersionString = $short"
 done
 
 # --- 2b. embed consolidated privacy manifest -------------------------------
