@@ -172,8 +172,8 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
                 // RN: native owns capping, JS owns rendering. Gate here; the
                 // counter is bumped later on the guide's "Digia Experience
                 // Viewed" event (see captureAnalyticsEvent).
-                if frequencyManager?.isAllowed(campaignKey: key, policy: campaign.frequency) == false {
-                    logVerbose("guide dropped — frequency capped: key=\(key)")
+                if let capReason = frequencyManager?.blockReason(campaignKey: key, policy: campaign.frequency) {
+                    logVerbose("guide dropped — frequency capped: key=\(key) cep=\(payload.cepCampaignId) reason=\(capReason) policy=\(String(describing: campaign.frequency))")
                     return
                 }
                 renderViaJs(payload)
@@ -182,8 +182,8 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
             dwellTracker.markViewed(payload.cepCampaignId)
             guideOrchestrator.start(campaign, payload: payload)
         case .nudge(let nudgeConfig):
-            if frequencyManager?.isAllowed(campaignKey: key, policy: campaign.frequency) == false {
-                logVerbose("nudge dropped — frequency capped: key=\(key)")
+            if let capReason = frequencyManager?.blockReason(campaignKey: key, policy: campaign.frequency) {
+                logVerbose("nudge dropped — frequency capped: key=\(key) cep=\(payload.cepCampaignId) reason=\(capReason) policy=\(String(describing: campaign.frequency))")
                 return
             }
             // Resolve variable context: dashboard schemas define type + fallback;
@@ -199,8 +199,8 @@ final class SDKInstance: ObservableObject, DigiaCEPDelegate {
                     variables: variableContext.values.isEmpty && variableContext.types.isEmpty ? nil : variableContext
                 ))
         case .survey(let cfg):
-            if frequencyManager?.isAllowed(campaignKey: key, policy: campaign.frequency) == false {
-                logVerbose("survey dropped — frequency capped: key=\(key)")
+            if let capReason = frequencyManager?.blockReason(campaignKey: key, policy: campaign.frequency) {
+                logVerbose("survey dropped — frequency capped: key=\(key) cep=\(payload.cepCampaignId) reason=\(capReason) policy=\(String(describing: campaign.frequency))")
                 return
             }
             if !surveyOrchestrator.start(payload: payload, config: cfg) {

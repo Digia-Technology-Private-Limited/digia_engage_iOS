@@ -170,8 +170,15 @@ final class FrequencyManager {
 
     /// Eligibility gate. A `nil`/empty policy is always allowed (never capped).
     func isAllowed(campaignKey: String, policy: FrequencyPolicy?) -> Bool {
-        guard let policy, policy.hasConstraint else { return true }
-        return FrequencyEvaluator.evaluate(policy, load(campaignKey), clock(), sessionIdProvider()).allow
+        blockReason(campaignKey: campaignKey, policy: policy) == nil
+    }
+
+    /// The reason this campaign would be capped right now, or `nil` when it is
+    /// allowed (or carries no constraint). Drives the gate via `isAllowed` and lets
+    /// the route emit a verbose "why it was dropped" log without re-deriving it.
+    func blockReason(campaignKey: String, policy: FrequencyPolicy?) -> FrequencySkipReason? {
+        guard let policy, policy.hasConstraint else { return nil }
+        return FrequencyEvaluator.evaluate(policy, load(campaignKey), clock(), sessionIdProvider()).reason
     }
 
     /// Bump on "Digia Experience Viewed". No-op for an uncapped policy.
