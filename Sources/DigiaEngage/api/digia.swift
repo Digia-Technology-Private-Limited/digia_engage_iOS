@@ -42,16 +42,12 @@ public enum Digia {
         SDKInstance.shared.clearUserId()
     }
 
-    /// Current analytics sessionId, or "" before init. Used by the RN bridge so
-    /// JS guide frequency capping can key its `session` windows to the native session.
-    public static func getSessionId() -> String {
-        SDKInstance.shared.currentSessionId
-    }
-
-    /// Registers a listener invoked with the new sessionId on every session
-    /// rotation (cold start / 30-min idle / setUserId / clearUserId).
-    public static func setOnSessionRotated(_ callback: ((String) -> Void)?) {
-        SDKInstance.shared.onSessionRotated = callback
+    /// Registers the RN render hook. When set, guides are treated as JS-rendered:
+    /// on a guide trigger the SDK applies frequency capping and, if allowed, invokes
+    /// this callback (with the trigger payload) to ask JS to render — it does not
+    /// render the guide natively. Used only by the React Native bridge.
+    public static func setOnGuideRenderRequest(_ callback: ((CEPTriggerPayload) -> Void)?) {
+        SDKInstance.shared.onGuideRenderRequest = callback
     }
 
     /// Records an analytics event for JS-rendered campaigns (guides / tooltips / spotlights).
