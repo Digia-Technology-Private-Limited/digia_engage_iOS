@@ -14,6 +14,11 @@ final class AnalyticsIdentityManager {
     /// Called whenever the session ID rotates. Wired by AnalyticsService to report the new session.
     var onSessionRotated: (() -> Void)?
 
+    /// Secondary rotation listener, invoked with the new sessionId. Kept separate
+    /// from `onSessionRotated` so SDKInstance can forward rotations to the RN
+    /// bridge without displacing the analytics service's own hook.
+    var externalSessionListener: ((String) -> Void)?
+
     private static let keyAnonymousId = "digia_anonymous_id"
     private static let keyUserId = "digia_user_id"
 
@@ -59,6 +64,7 @@ final class AnalyticsIdentityManager {
     private func rotateSession() {
         _sessionId = UUID().uuidString
         onSessionRotated?()
+        externalSessionListener?(_sessionId)
     }
 
     private func loadOrCreate(key: String) -> String {

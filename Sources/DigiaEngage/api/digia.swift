@@ -42,6 +42,18 @@ public enum Digia {
         SDKInstance.shared.clearUserId()
     }
 
+    /// Current analytics sessionId, or "" before init. Used by the RN bridge so
+    /// JS guide frequency capping can key its `session` windows to the native session.
+    public static func getSessionId() -> String {
+        SDKInstance.shared.currentSessionId
+    }
+
+    /// Registers a listener invoked with the new sessionId on every session
+    /// rotation (cold start / 30-min idle / setUserId / clearUserId).
+    public static func setOnSessionRotated(_ callback: ((String) -> Void)?) {
+        SDKInstance.shared.onSessionRotated = callback
+    }
+
     /// Records an analytics event for JS-rendered campaigns (guides / tooltips / spotlights).
     /// Native campaigns (nudge, inline, survey) are tracked automatically by the SDK.
     /// The JS layer fires each lifecycle event by its Engage matrix `eventName` with
