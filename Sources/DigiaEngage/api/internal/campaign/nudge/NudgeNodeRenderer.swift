@@ -79,23 +79,56 @@ private struct NudgeImageView: View {
     @Environment(\.digiaVariables) private var variables
 
     private var url: String { interpolate(node.url, context: variables) }
+    private var maxWidth: CGFloat? { node.box.fillWidth ? .infinity : nil }
+    private var image: some View { WebImage(url: URL(string: url)).resizable() }
 
     var body: some View {
         if url.isEmpty {
             nudgePlaceholder(label: "Image", height: node.box.fixedHeight ?? 120)
         } else if node.aspectRatio > 0 {
-            WebImage(url: URL(string: url))
-                .resizable()
-                .aspectRatio(node.aspectRatio, contentMode: node.contentMode)
-                .frame(maxWidth: node.box.fillWidth ? .infinity : nil)
+            aspectRatioImage
         } else {
-            WebImage(url: URL(string: url))
-                .resizable()
-                .aspectRatio(contentMode: node.contentMode)
-                .frame(
-                    maxWidth: node.box.fillWidth ? .infinity : nil,
-                    maxHeight: node.box.fixedHeight
-                )
+            fixedImage
+        }
+    }
+
+    // Aspect ratio drives the frame's width:height; the image is scaled to that frame
+    // per the fit.
+    @ViewBuilder
+    private var aspectRatioImage: some View {
+        switch node.fit {
+        case .contain:
+            image.aspectRatio(node.aspectRatio, contentMode: .fit)
+                .frame(maxWidth: maxWidth)
+        case .cover:
+            image.aspectRatio(node.aspectRatio, contentMode: .fill)
+                .frame(maxWidth: maxWidth)
+                .clipped()
+        case .fill:
+            // Stretch: a clear box of the target ratio, image overlaid to fill it exactly.
+            Color.clear
+                .aspectRatio(node.aspectRatio, contentMode: .fit)
+                .overlay(image)
+                .frame(maxWidth: maxWidth)
+                .clipped()
+        }
+    }
+
+    // No aspect ratio: frame is fillWidth × fixedHeight; the image is scaled to it per fit.
+    @ViewBuilder
+    private var fixedImage: some View {
+        switch node.fit {
+        case .contain:
+            image.scaledToFit()
+                .frame(maxWidth: maxWidth, maxHeight: node.box.fixedHeight)
+        case .cover:
+            image.scaledToFill()
+                .frame(maxWidth: maxWidth, maxHeight: node.box.fixedHeight)
+                .clipped()
+        case .fill:
+            // No scaledTo: the image stretches to exactly fill the frame bounds.
+            image
+                .frame(maxWidth: maxWidth, maxHeight: node.box.fixedHeight)
                 .clipped()
         }
     }
@@ -222,19 +255,21 @@ private struct NudgeLottieView: View {
         } else if let url = URL(string: resolved) {
             Group {
                 if node.autoplay {
-                    LottieView {
-                        await LottieAnimation.loadedFrom(url: url)
-                    }
-                    .playing(loopMode: node.loop ? .loop : .playOnce)
+                    lottie(url: url)
+                        .playing(loopMode: node.loop ? .loop : .playOnce)
                 } else {
-                    LottieView {
-                        await LottieAnimation.loadedFrom(url: url)
-                    }
+                    lottie(url: url)
                 }
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: node.height)
+            .nudgeMediaFrame(aspectRatio: node.aspectRatio, height: node.height)
         }
+    }
+
+    // `.resizable()` lets the animation fill the frame; `contentMode` then applies the fit.
+    private func lottie(url: URL) -> LottieView<EmptyView> {
+        LottieView { await LottieAnimation.loadedFrom(url: url) }
+            .resizable()
+            .configure(\.contentMode, to: node.fit.uiContentMode)
     }
 }
 
@@ -395,6 +430,37 @@ private extension View {
             clipShape(RoundedRectangle(cornerRadius: cornerRadius))
         } else {
             self
+        }
+    }
+}
+
+// MARK: - Media (image / Lottie) helpers
+
+private extension NudgeContentFit {
+    /// Lottie scales via its underlying `LottieAnimationView` (a UIView), so each fit
+    /// maps to a UIView content mode.
+    var uiContentMode: UIView.ContentMode {
+        switch self {
+        case .cover:   return .scaleAspectFill
+        case .contain: return .scaleAspectFit
+        case .fill:    return .scaleToFill
+        }
+    }
+}
+
+private extension View {
+    /// Sizes a full-width media view: aspect ratio (when set) drives the height,
+    /// otherwise a fixed height is used. Mirrors the image renderer's frame rule.
+    @ViewBuilder
+    func nudgeMediaFrame(aspectRatio: CGFloat, height: CGFloat) -> some View {
+        if aspectRatio > 0 {
+            self.frame(maxWidth: .infinity)
+                .aspectRatio(aspectRatio, contentMode: .fit)
+                .clipped()
+        } else {
+            self.frame(maxWidth: .infinity)
+                .frame(height: height)
+                .clipped()
         }
     }
 }
