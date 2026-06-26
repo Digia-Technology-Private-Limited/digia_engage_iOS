@@ -72,7 +72,7 @@ struct NudgeParser {
             box: aspectRatio > 0 ? box.withoutFixedHeight() : box,
             url: url,
             aspectRatio: aspectRatio,
-            contentMode: parseFit(props["fit"] as? String ?? "cover")
+            fit: parseFit(props["fit"] as? String ?? "cover")
         )
     }
 
@@ -109,12 +109,15 @@ struct NudgeParser {
 
     private func parseLottie(_ props: [String: Any], box: NudgeBox) -> NudgeLottie {
         let src = (props["src"] as? [String: Any]) ?? [:]
+        let aspectRatio = CGFloat((props["aspectRatio"] as? Double) ?? 0)
         return NudgeLottie(
-            box: box,
+            box: aspectRatio > 0 ? box.withoutFixedHeight() : box,
             url: src["lottiePath"] as? String ?? "",
             height: CGFloat((props["height"] as? Double) ?? 160),
             loop: (props["animationType"] as? String ?? "loop") != "once",
-            autoplay: (props["animate"] as? Bool) ?? true
+            autoplay: (props["animate"] as? Bool) ?? true,
+            fit: parseFit(props["fit"] as? String ?? "cover"),
+            aspectRatio: aspectRatio
         )
     }
 
@@ -206,8 +209,8 @@ struct NudgeParser {
         switch v { case "center": return .center; case "right", "end": return .trailing; default: return .leading }
     }
 
-    private func parseFit(_ v: String) -> ContentMode {
-        switch v { case "contain": return .fit; default: return .fill }
+    private func parseFit(_ v: String) -> NudgeContentFit {
+        switch v { case "contain": return .contain; case "fill": return .fill; default: return .cover }
     }
 
     private func parseFontWeight(_ v: String) -> Font.Weight {

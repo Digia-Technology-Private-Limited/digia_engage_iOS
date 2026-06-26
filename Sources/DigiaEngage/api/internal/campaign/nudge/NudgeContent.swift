@@ -29,6 +29,8 @@ struct NudgeBox: Equatable {
 
 enum NudgeSelfAlign          { case start, center, end }
 enum NudgeButtonVariant      { case fill, outline, text, elevated }
+
+enum NudgeContentFit { case cover, contain, fill }
 enum NudgeCrossAxisAlignment { case start, center, end }
 enum NudgeMainAxisAlignment  { case start, center, end, spaceBetween, spaceAround, spaceEvenly }
 
@@ -71,7 +73,7 @@ struct NudgeImage: Equatable {
     let box: NudgeBox
     let url: String
     let aspectRatio: CGFloat
-    let contentMode: ContentMode
+    let fit: NudgeContentFit
 }
 
 struct NudgeButton: Equatable {
@@ -106,6 +108,8 @@ struct NudgeLottie: Equatable {
     let height: CGFloat
     let loop: Bool
     let autoplay: Bool
+    let fit: NudgeContentFit
+    let aspectRatio: CGFloat
 }
 
 struct NudgeCarousel: Equatable {
