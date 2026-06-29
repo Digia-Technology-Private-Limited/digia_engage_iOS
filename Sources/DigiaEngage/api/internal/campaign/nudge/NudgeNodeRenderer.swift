@@ -92,7 +92,9 @@ private struct NudgeImageView: View {
             // nudgeBox clip is unreliable here: the image's scaledToFill/.clipped
             // frame can be sized differently from a hugging nudgeBox, so the
             // rounded clip wouldn't line up with the image's rendered edges.
-            .clipShapeIfRadius(cornerRadius: node.box.borderRadius)
+            // Use the border's inner radius (box radius minus the border width) so
+            // the image sits flush inside the border — matching Android/Flutter.
+            .clipShapeIfRadius(cornerRadius: max(0, node.box.borderRadius - node.box.borderWidth))
     }
 
     @ViewBuilder
