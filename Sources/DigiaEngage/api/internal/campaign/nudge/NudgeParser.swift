@@ -36,16 +36,16 @@ struct NudgeParser {
         let props = json["props"] as? [String: Any] ?? [:]
         let box = parseBox(json["containerProps"] as? [String: Any])
         switch type {
-        case "digia/text":    return .text(parseText(props, box: box))
-        case "digia/image":   return .image(parseImage(props, box: box))
-        case "digia/button":  return .button(parseButton(props, box: box))
+        case "digia/text": return .text(parseText(props, box: box))
+        case "digia/image": return .image(parseImage(props, box: box))
+        case "digia/button": return .button(parseButton(props, box: box))
         case "fw/sized_box":
             let h = CGFloat(parseDouble(props["height"]) ?? 8)
             return .gap(NudgeGap(box: box, height: h))
         case "digia/styledHorizontalDivider": return .divider(parseDivider(props, box: box))
-        case "digia/lottie":       return .lottie(parseLottie(props, box: box))
-        case "digia/carousel":     return .carousel(parseCarousel(props, box: box))
-        case "digia/videoPlayer":  return .video(parseVideo(props, box: box))
+        case "digia/lottie": return .lottie(parseLottie(props, box: box))
+        case "digia/carousel": return .carousel(parseCarousel(props, box: box))
+        case "digia/videoPlayer": return .video(parseVideo(props, box: box))
         default: return nil
         }
     }
@@ -54,15 +54,68 @@ struct NudgeParser {
 
     private func parseText(_ props: [String: Any], box: NudgeBox) -> NudgeText {
         let style = (props["textStyle"] as? [String: Any]) ?? [:]
-        let font  = ((style["fontToken"] as? [String: Any])?["font"] as? [String: Any]) ?? [:]
+        let font = ((style["fontToken"] as? [String: Any])?["font"] as? [String: Any]) ?? [:]
         return NudgeText(
             box: box,
             text: props["text"] as? String ?? "",
             fontSize: CGFloat(parseDouble(font["size"]) ?? 16),
             fontWeight: parseFontWeight(font["weight"] as? String ?? "400"),
             color: parseColor(style["textColor"] as? String) ?? Color(hex: "#111111") ?? .primary,
-            textAlignment: parseTextAlignment(props["alignment"] as? String ?? "left")
+            textAlignment: parseTextAlignment(props["alignment"] as? String ?? "left"),
+            lineHeight: (props["lineHeight"] as? Double).map { CGFloat($0) },
+            spans: parseSpans(props["spans"])
         )
+    }
+
+    /// Decodes the optional rich overlay (`props.spans`). Each entry is
+    /// `{ text, style: { fontWeight, fontSize, textColor, highlightColor,
+    /// lineHeight } }`; every style key is optional and inherits the base when
+    /// absent. Empty/invalid entries are skipped.
+    private func parseSpans(_ raw: Any?) -> [NudgeTextSpan] {
+        guard let arr = raw as? [[String: Any]] else { return [] }
+        return arr.compactMap { item in
+            guard let text = item["text"] as? String, !text.isEmpty else { return nil }
+            let style = (item["style"] as? [String: Any]) ?? [:]
+            // Decoration (underline / lineThrough / colour / thickness) temporarily
+            // disabled pending cross-platform parity — see ai_docs/text_decoration_parity.md.
+            // let decoration = style["decoration"] as? String
+            return NudgeTextSpan(
+                text: text,
+                style: NudgeSpanStyle(
+                    fontWeight: (style["fontWeight"] as? Double).flatMap {
+                        parseFontWeightNumber(Int($0))
+                    },
+                    fontSize: (style["fontSize"] as? Double).map { CGFloat($0) },
+                    color: parseColor(style["textColor"] as? String),
+                    highlightColor: parseColor(style["highlightColor"] as? String),
+                    italic: (style["fontStyle"] as? String) == "italic",
+                    // underline: decoration == "underline",
+                    // strikethrough: decoration == "lineThrough",
+                    // decorationColor: parseColor(style["decorationColor"] as? String),
+                    // decorationThickness: (style["decorationThickness"] as? Double).map { CGFloat($0) }
+                    underline: false,
+                    strikethrough: false,
+                    decorationColor: nil,
+                    decorationThickness: nil
+                )
+            )
+        }
+    }
+
+    /// A span's numeric CSS weight (100…900) → `Font.Weight`; nil for unknown.
+    private func parseFontWeightNumber(_ n: Int) -> Font.Weight? {
+        switch n {
+        case 100: return .thin
+        case 200: return .ultraLight
+        case 300: return .light
+        case 400: return .regular
+        case 500: return .medium
+        case 600: return .semibold
+        case 700: return .bold
+        case 800: return .heavy
+        case 900: return .black
+        default: return nil
+        }
     }
 
     private func parseImage(_ props: [String: Any], box: NudgeBox) -> NudgeImage {
@@ -77,18 +130,19 @@ struct NudgeParser {
     }
 
     private func parseButton(_ props: [String: Any], box: NudgeBox) -> NudgeButton {
-        let text         = (props["text"] as? [String: Any]) ?? [:]
-        let textStyle    = (text["textStyle"] as? [String: Any]) ?? [:]
-        let font         = ((textStyle["fontToken"] as? [String: Any])?["font"] as? [String: Any]) ?? [:]
+        let text = (props["text"] as? [String: Any]) ?? [:]
+        let textStyle = (text["textStyle"] as? [String: Any]) ?? [:]
+        let font = ((textStyle["fontToken"] as? [String: Any])?["font"] as? [String: Any]) ?? [:]
         let defaultStyle = (props["defaultStyle"] as? [String: Any]) ?? [:]
-        let shape        = (props["shape"] as? [String: Any]) ?? [:]
+        let shape = (props["shape"] as? [String: Any]) ?? [:]
         return NudgeButton(
             box: box,
             label: text["text"] as? String ?? "Button",
             variant: parseButtonVariant(props["variant"] as? String ?? "fill"),
             fontSize: CGFloat(parseDouble(font["size"]) ?? 16),
             fontWeight: parseFontWeight(font["weight"] as? String ?? "600"),
-            background: parseColor(defaultStyle["backgroundColor"] as? String) ?? Color(hex: "#4945FF") ?? .blue,
+            background: parseColor(defaultStyle["backgroundColor"] as? String) ?? Color(
+                hex: "#4945FF") ?? .blue,
             textColor: parseColor(textStyle["textColor"] as? String) ?? .white,
             radius: CGFloat(parseDouble(shape["borderRadius"]) ?? 8),
             actions: NudgeActionParser().parse(props["onClick"] as? [String: Any]),
@@ -158,18 +212,18 @@ struct NudgeParser {
             fixedWidth: isFullWidth ? nil : parseDouble(style["width"]).map { CGFloat($0) },
             fixedHeight: parseDouble(style["height"]).map { CGFloat($0) },
             background: parseColor((style["bgColor"] ?? style["backgroundColor"]) as? String),
-            paddingLeft:   parseSide(style["padding"], key: "left"),
-            paddingTop:    parseSide(style["padding"], key: "top"),
-            paddingRight:  parseSide(style["padding"], key: "right"),
+            paddingLeft: parseSide(style["padding"], key: "left"),
+            paddingTop: parseSide(style["padding"], key: "top"),
+            paddingRight: parseSide(style["padding"], key: "right"),
             paddingBottom: parseSide(style["padding"], key: "bottom"),
-            marginLeft:    parseSide(style["margin"], key: "left"),
-            marginTop:     parseSide(style["margin"], key: "top"),
-            marginRight:   parseSide(style["margin"], key: "right"),
-            marginBottom:  parseSide(style["margin"], key: "bottom"),
-            borderRadius:  CGFloat(parseDouble(style["borderRadius"]) ?? 0),
-            borderColor:   border.flatMap { parseColor($0["borderColor"] as? String) },
-            borderWidth:   CGFloat(parseDouble(border?["borderWidth"]) ?? 0),
-            selfAlign:     parseSelfAlign(cp["align"] as? String ?? "")
+            marginLeft: parseSide(style["margin"], key: "left"),
+            marginTop: parseSide(style["margin"], key: "top"),
+            marginRight: parseSide(style["margin"], key: "right"),
+            marginBottom: parseSide(style["margin"], key: "bottom"),
+            borderRadius: CGFloat(parseDouble(style["borderRadius"]) ?? 0),
+            borderColor: border.flatMap { parseColor($0["borderColor"] as? String) },
+            borderWidth: CGFloat(parseDouble(border?["borderWidth"]) ?? 0),
+            selfAlign: parseSelfAlign(cp["align"] as? String ?? "")
         )
     }
 
@@ -182,10 +236,10 @@ struct NudgeParser {
     private func parseDouble(_ value: Any?) -> Double? {
         switch value {
         case let n as NSNumber: return n.doubleValue
-        case let d as Double:   return d
-        case let i as Int:      return Double(i)
-        case let s as String:   return Double(s.trimmingCharacters(in: .whitespaces))
-        default:                return nil
+        case let d as Double: return d
+        case let i as Int: return Double(i)
+        case let s as String: return Double(s.trimmingCharacters(in: .whitespaces))
+        default: return nil
         }
     }
 
@@ -202,37 +256,64 @@ struct NudgeParser {
     }
 
     private func crossAxis(_ v: String) -> NudgeCrossAxisAlignment {
-        switch v { case "center": return .center; case "end": return .end; default: return .start }
+        switch v {
+        case "center": return .center
+        case "end": return .end
+        default: return .start
+        }
     }
 
     private func mainAxis(_ v: String) -> NudgeMainAxisAlignment {
         switch v {
-        case "center":       return .center
-        case "end":          return .end
+        case "center": return .center
+        case "end": return .end
         case "spaceBetween": return .spaceBetween
-        case "spaceAround":  return .spaceAround
-        case "spaceEvenly":  return .spaceEvenly
-        default:             return .start
+        case "spaceAround": return .spaceAround
+        case "spaceEvenly": return .spaceEvenly
+        default: return .start
         }
     }
 
     private func parseTextAlignment(_ v: String) -> TextAlignment {
-        switch v { case "center": return .center; case "right", "end": return .trailing; default: return .leading }
+        switch v {
+        case "center": return .center
+        case "right", "end": return .trailing
+        default: return .leading
+        }
     }
 
     private func parseFit(_ v: String) -> NudgeContentFit {
-        switch v { case "contain": return .contain; case "fill": return .fill; default: return .cover }
+        switch v {
+        case "contain": return .contain
+        case "fill": return .fill
+        default: return .cover
+        }
     }
 
     private func parseFontWeight(_ v: String) -> Font.Weight {
-        switch v { case "500": return .medium; case "600": return .semibold; case "700": return .bold; default: return .regular }
+        switch v {
+        case "500": return .medium
+        case "600": return .semibold
+        case "700": return .bold
+        default: return .regular
+        }
     }
 
     private func parseButtonVariant(_ v: String) -> NudgeButtonVariant {
-        switch v { case "outline": return .outline; case "text": return .text; case "elevated": return .elevated; default: return .fill }
+        switch v {
+        case "outline": return .outline
+        case "text": return .text
+        case "elevated": return .elevated
+        default: return .fill
+        }
     }
 
     private func parseSelfAlign(_ v: String) -> NudgeSelfAlign? {
-        switch v { case "start": return .start; case "center": return .center; case "end": return .end; default: return nil }
+        switch v {
+        case "start": return .start
+        case "center": return .center
+        case "end": return .end
+        default: return nil
+        }
     }
 }
