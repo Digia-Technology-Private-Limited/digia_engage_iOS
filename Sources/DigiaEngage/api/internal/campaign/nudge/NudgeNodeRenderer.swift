@@ -60,19 +60,79 @@ private struct NudgeTextView: View {
     let node: NudgeText
     @Environment(\.digiaVariables) private var variables
 
+    // Rendered via a TextKit-1 UITextView so it can carry per-run decoration
+    // colour/thickness and a block-level line height (paragraph style) — neither
+    // of which SwiftUI `Text` can express.
     var body: some View {
-        Text(interpolate(node.text, context: variables))
-            .font(
-                SDKInstance.shared.fontFactory.getDefaultFont(
-                    size: Double(node.fontSize), weight: node.fontWeight, italic: false
-                )
-            )
-            .fontWeight(node.fontWeight)
-            .foregroundStyle(node.color)
-            .multilineTextAlignment(node.textAlignment)
+        NudgeRichText(attributed: attributed, fillWidth: node.box.fillWidth)
             .frame(
                 maxWidth: node.box.fillWidth ? .infinity : nil,
                 alignment: node.textAlignment.frameAlignment)
+    }
+
+    private var attributed: NSAttributedString {
+        let result = NSMutableAttributedString()
+        // One run for plain text; otherwise the styled spans (each over the base).
+        let runs: [(String, NudgeSpanStyle?)] =
+            node.spans.isEmpty
+            ? [(interpolate(node.text, context: variables), nil)]
+            : node.spans.map { (interpolate($0.text, context: variables), $0.style) }
+        for (text, style) in runs {
+            result.append(NSAttributedString(string: text, attributes: runAttributes(style)))
+        }
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = nsAlignment
+        // Match Android/Compose (`lineHeight.em`): pin the line height to base font
+        // size × multiplier. Use only `minimumLineHeight` — NOT `maximumLineHeight`
+        // (which clips glyphs taller than the line, e.g. a big "lo") and NOT
+        // `lineHeightMultiple` (which scales the line's *natural* height, ballooning
+        // lines that contain a much larger span). A span taller than the line then
+        // grows that one line instead of clipping.
+        if let lineHeight = node.lineHeight {
+            paragraph.minimumLineHeight = node.fontSize * lineHeight
+        }
+        result.addAttribute(
+            .paragraphStyle, value: paragraph, range: NSRange(location: 0, length: result.length)
+        )
+        return result
+    }
+
+    private func runAttributes(_ style: NudgeSpanStyle?) -> [NSAttributedString.Key: Any] {
+        let font = SDKInstance.shared.fontFactory.getDefaultUIFont(
+            size: Double(style?.fontSize ?? node.fontSize),
+            weight: style?.fontWeight ?? node.fontWeight,
+            italic: style?.italic ?? false
+        )
+        var attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: UIColor(style?.color ?? node.color),
+        ]
+        if let highlight = style?.highlightColor { attrs[.backgroundColor] = UIColor(highlight) }
+        if style?.underline == true { attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue }
+        if style?.strikethrough == true {
+            attrs[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
+        }
+        // Colour is drawn natively by UIKit at the correct position via underlineColor /
+        // strikethroughColor; we only take over the drawing when a custom thickness is
+        // set (see DigiaDecorationLayoutManager), reusing digiaDecorationColor for it.
+        if let color = style?.decorationColor {
+            let uiColor = UIColor(color)
+            attrs[.underlineColor] = uiColor
+            attrs[.strikethroughColor] = uiColor
+            attrs[.digiaDecorationColor] = uiColor
+        }
+        if let thickness = style?.decorationThickness {
+            attrs[.digiaDecorationThickness] = thickness
+        }
+        return attrs
+    }
+
+    private var nsAlignment: NSTextAlignment {
+        switch node.textAlignment {
+        case .center: return .center
+        case .trailing: return .right
+        default: return .left
+        }
     }
 }
 
