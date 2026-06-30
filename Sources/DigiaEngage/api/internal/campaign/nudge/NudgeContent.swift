@@ -70,11 +70,14 @@ struct NudgeSpanStyle: Equatable {
     let fontSize: CGFloat?
     let color: Color?
     let highlightColor: Color?
-    let lineHeight: CGFloat?
     let italic: Bool
     /// Single decoration (not combinable).
     let underline: Bool
     let strikethrough: Bool
+    /// Decoration line colour; nil = same as the text colour.
+    let decorationColor: Color?
+    /// Decoration line thickness in points; nil = default.
+    let decorationThickness: CGFloat?
 }
 
 /// One styled run: its literal `text` plus a `style` bag (the wire `{ text, style }`).
@@ -90,6 +93,8 @@ struct NudgeText: Equatable {
     let fontWeight: Font.Weight
     let color: Color
     let textAlignment: TextAlignment
+    /// Block-level line height (unitless multiplier) for the whole text; nil = default.
+    let lineHeight: CGFloat?
     /// Optional rich overlay; empty = render plain `text` with the base style.
     var spans: [NudgeTextSpan] = []
 }

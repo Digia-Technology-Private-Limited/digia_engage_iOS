@@ -62,6 +62,7 @@ struct NudgeParser {
             fontWeight: parseFontWeight(font["weight"] as? String ?? "400"),
             color: parseColor(style["textColor"] as? String) ?? Color(hex: "#111111") ?? .primary,
             textAlignment: parseTextAlignment(props["alignment"] as? String ?? "left"),
+            lineHeight: (props["lineHeight"] as? Double).map { CGFloat($0) },
             spans: parseSpans(props["spans"])
         )
     }
@@ -75,7 +76,9 @@ struct NudgeParser {
         return arr.compactMap { item in
             guard let text = item["text"] as? String, !text.isEmpty else { return nil }
             let style = (item["style"] as? [String: Any]) ?? [:]
-            let decoration = style["decoration"] as? String
+            // Decoration (underline / lineThrough / colour / thickness) temporarily
+            // disabled pending cross-platform parity — see ai_docs/text_decoration_parity.md.
+            // let decoration = style["decoration"] as? String
             return NudgeTextSpan(
                 text: text,
                 style: NudgeSpanStyle(
@@ -83,10 +86,15 @@ struct NudgeParser {
                     fontSize: (style["fontSize"] as? Double).map { CGFloat($0) },
                     color: parseColor(style["textColor"] as? String),
                     highlightColor: parseColor(style["highlightColor"] as? String),
-                    lineHeight: (style["lineHeight"] as? Double).map { CGFloat($0) },
                     italic: (style["fontStyle"] as? String) == "italic",
-                    underline: decoration == "underline",
-                    strikethrough: decoration == "lineThrough"
+                    // underline: decoration == "underline",
+                    // strikethrough: decoration == "lineThrough",
+                    // decorationColor: parseColor(style["decorationColor"] as? String),
+                    // decorationThickness: (style["decorationThickness"] as? Double).map { CGFloat($0) }
+                    underline: false,
+                    strikethrough: false,
+                    decorationColor: nil,
+                    decorationThickness: nil
                 )
             )
         }
